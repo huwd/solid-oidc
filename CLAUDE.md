@@ -38,7 +38,7 @@ Follow [`docs/development-secrets.md`](docs/development-secrets.md). In short:
 
 ## Git
 
-- `main` is protected by a ruleset: changes go through pull requests, which need the CI and Verify pins checks to pass. Merge with a merge commit, so the branch's signed commits survive; squash and rebase merging are turned off. Force pushes and deleting `main` are blocked.
+- `main` is protected by the ruleset in [`.github/rulesets/protect_main.json`](.github/rulesets/protect_main.json): changes go through pull requests that are up to date with `main` and pass the CI and Verify pins checks. Merge with a merge commit, so the branch's signed commits survive; squash and rebase merging are turned off. Force pushes and deleting `main` are blocked. Change the ruleset by editing that file in a pull request, then apply it as [its README](.github/rulesets/README.md) describes.
 - Work on a branch, push it, and open a pull request. Ask before pushing or opening one.
 - `PLAN.md` is a local planning note, excluded through `.git/info/exclude`. Do not commit it.
 - Commits are signed through the Bitwarden SSH agent. Commit with `git commit -s` so Git adds a `Signed-off-by` line naming the maintainer; never write that line yourself.
