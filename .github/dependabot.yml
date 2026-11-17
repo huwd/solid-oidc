@@ -1,0 +1,48 @@
+# Weekly updates with a seven-day cooldown: a new release waits a week before
+# Dependabot proposes it, so a compromised or broken release has time to be
+# noticed and pulled. pnpm's minimumReleaseAge applies the same wait locally.
+# Minor and patch updates arrive as one grouped pull request per ecosystem;
+# majors arrive separately.
+#
+# For actions locked in .github/workflows/actions.lock, Dependabot updates
+# the lockfile in the same pull request as the workflow.
+#
+# Not covered by Dependabot; bump these by hand:
+# - .node-version, and the Node version in the Dockerfile's builder tag
+# - the gh-actions-lock extension version in verify-pins.yml
+# - devenv.lock (`devenv update`)
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions-minor-and-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      npm-minor-and-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      docker-minor-and-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]

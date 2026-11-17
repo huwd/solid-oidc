@@ -1,0 +1,41 @@
+# Fails when a workflow dependency is not locked to a commit that verifies
+# upstream. Adapted from github/gh-actions-lock's verify-lockfile.yml.
+#
+# - lockfile: actions.lock matches the workflows, and every locked commit is
+#   still reachable from its tag upstream.
+# - pins: SHA pins the lockfile does not cover, such as reusable workflow
+#   calls, match the release tag in their trailing comment.
+
+name: Verify pins
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lockfile:
+    name: Verify lockfile
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - run: gh extension install github/gh-actions-lock --pin v0.4.1
+      - run: gh actions-lock --verify
+
+  pins:
+    name: Verify SHA pins
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - run: .github/scripts/verify-pins.sh
