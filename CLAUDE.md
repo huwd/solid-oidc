@@ -38,6 +38,8 @@ Follow [`docs/development-secrets.md`](docs/development-secrets.md). In short:
 
 ## Git
 
+- `main` is protected by a ruleset: changes go through pull requests, which need the CI and Verify pins checks to pass. Merge with a merge commit, so the branch's signed commits survive; squash and rebase merging are turned off. Force pushes and deleting `main` are blocked.
+- Work on a branch, push it, and open a pull request. Ask before pushing or opening one.
 - `PLAN.md` is a local planning note, excluded through `.git/info/exclude`. Do not commit it.
 - Commits are signed through the Bitwarden SSH agent. Commit with `git commit -s` so Git adds a `Signed-off-by` line naming the maintainer; never write that line yourself.
 - Attribute AI help with trailers, in this order, following the [laptop repository's record 0016](https://huwd.github.io/declarative_laptop/decisions/0016-ai-attribution-trailers/):
