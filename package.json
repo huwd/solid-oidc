@@ -1,0 +1,33 @@
+{
+  "name": "solid-oidc",
+  "version": "0.0.0",
+  "description": "A Solid-OIDC identity provider that brokers login to an upstream OpenID Connect provider such as Pocket ID",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@12.18.0",
+  "engines": {
+    "node": ">=26.13.1"
+  },
+  "scripts": {
+    "check": "pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run docs:lint",
+    "dev": "node --watch src/bin/main.ts",
+    "docs:lint": "markdownlint-cli2",
+    "format": "biome check --write .",
+    "lint": "biome ci .",
+    "start": "node src/bin/main.ts",
+    "test": "node --test --experimental-test-coverage --test-coverage-include='src/**/*.ts' --test-coverage-include-all --test-coverage-exclude='src/**/*.test.ts' --test-coverage-exclude='src/bin/**' --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 'src/**/*.test.ts'",
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "koa": "3.3.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.6",
+    "@types/koa": "3.0.3",
+    "@types/node": "26.6.6",
+    "markdownlint-cli2": "0.24.0",
+    "typescript": "7.0.2"
+  }
+}

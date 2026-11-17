@@ -1,0 +1,14 @@
+// Markdown structure checks: `pnpm run docs:lint` locally, "Docs lint" in CI.
+{
+  "config": {
+    "default": true,
+    // Line length: prose isn't hard-wrapped to a limit; rewrapping churns diffs.
+    "MD013": false,
+    // Table pipe alignment: fiddly to maintain, adds nothing structurally.
+    "MD060": false,
+    // Repeated headings are fine under different parents.
+    "MD024": { "siblings_only": true }
+  },
+  "globs": ["**/*.md"],
+  "gitignore": true
+}

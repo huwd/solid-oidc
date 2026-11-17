@@ -1,0 +1,7 @@
+# Only package metadata and runtime sources go into the image.
+*
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!src/
+src/**/*.test.ts

@@ -1,0 +1,8 @@
+# Development secrets, encrypted to two age recipients: the identity derived
+# from the SSH agent for daily use, and the recovery identity held only in
+# Bitwarden. See docs/decisions/0007-development-secrets.md.
+creation_rules:
+  - path_regex: (^|/)[^/]*\.sops\.env$
+    age: >-
+      age1y3uvjsqzcjauj2yvg8w5jaal6am7lh3n9tw4sw57cgj6qmkns98sc6747q,
+      age17sptfmw27f22rxg6g8n5ep3tma6wajl4uf3yfjy5vncxam278ffqw08rkx

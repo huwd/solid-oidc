@@ -1,0 +1,12 @@
+node_modules/
+coverage/
+
+# devenv
+.devenv*
+devenv.local.nix
+.direnv/
+
+# Local state. Real secrets live only in *.sops.env, encrypted.
+/data/
+.env
+.env.*
