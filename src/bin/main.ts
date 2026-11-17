@@ -4,12 +4,16 @@
 // coverage. Keep logic out of this file; the functions it calls are tested.
 
 import { once } from "node:events";
+import { readFile } from "node:fs/promises";
 
 import { createApp } from "../app.ts";
-import { parseConfig } from "../config.ts";
+import { loadConfig } from "../load-config.ts";
 import { startServer } from "../server.ts";
 
-const result = parseConfig(process.env);
+const result = await loadConfig({
+  environment: process.env,
+  readTextFile: (path) => readFile(path, { encoding: "utf8" }),
+});
 if (!result.ok) {
   for (const error of result.errors) {
     console.error(JSON.stringify({ level: "error", message: "Invalid configuration", error }));
@@ -17,7 +21,7 @@ if (!result.ok) {
   process.exit(1);
 }
 
-const { config } = result;
+const config = result.value;
 await using server = await startServer({
   app: createApp(),
   host: config.host,
@@ -29,6 +33,7 @@ console.log(
     message: "Listening",
     issuer: config.issuer,
     port: server.port,
+    upstreamIssuer: config.upstream.issuer,
   }),
 );
 

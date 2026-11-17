@@ -12,6 +12,7 @@ Each change adds its entry under Unreleased when it merges. A release moves thos
 
 - A container image for `linux/amd64`, published to `ghcr.io/huwd/solid-oidc`, that runs as a non-root user and includes a healthcheck.
 - A health endpoint at `GET /health`.
-- Configuration through the `ISSUER_URL`, `HOST` and `PORT` environment variables, validated at startup.
+- Configuration through environment variables, validated at startup with every problem reported at once: the broker's issuer, the upstream provider's issuer and client credentials, the accounts file and the data directory.
+- An accounts file in JSON that maps each upstream issuer and subject to the WebID it may log in as. Accounts not listed are refused.
 
 [Unreleased]: https://github.com/huwd/solid-oidc/commits/main

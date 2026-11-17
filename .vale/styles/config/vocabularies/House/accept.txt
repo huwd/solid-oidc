@@ -26,6 +26,8 @@ OAuth
 (?i)pluggable
 pnpm('s)?
 (?i)pragmas?
+(?i)rebase
+(?i)rulesets?
 Ryzen
 shellcheck
 Synology

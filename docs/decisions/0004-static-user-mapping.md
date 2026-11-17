@@ -25,14 +25,21 @@ The planning notes require that an email address or other user-supplied claim mu
 
 ### Static configuration, keyed by upstream issuer and subject (chosen)
 
-A configuration file lists the allowed accounts, for example:
+A JSON configuration file lists the allowed accounts, for example:
 
-```yaml
-accounts:
-  - upstreamIssuer: https://auth.example.org
-    upstreamSubject: 8c1f…
-    webId: https://example.org/profile#me
+```json
+{
+  "accounts": [
+    {
+      "upstreamIssuer": "https://auth.example.org",
+      "upstreamSubject": "8c1f…",
+      "webId": "https://example.org/profile#me"
+    }
+  ]
+}
 ```
+
+JSON needs no parser dependency. YAML would be easier to edit by hand, but would add one.
 
 The mapping is reviewed, versioned with the deployment and needs no admin interface.
 Pocket ID's subject is a stable identifier, unlike a username or email address, which can change or be reused.

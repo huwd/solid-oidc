@@ -31,6 +31,6 @@ Never move or delete a pushed tag. If publishing fails after the image reaches t
 
 - The workflow run succeeded.
 - `docker buildx imagetools inspect ghcr.io/huwd/solid-oidc:X.Y.Z` shows the new image.
-- The image starts: `docker run --rm --env ISSUER_URL=https://id.example.test ghcr.io/huwd/solid-oidc:X.Y.Z`.
+- The image starts with the settings from "Running the image" in the README, and its healthcheck reports healthy.
 
 The first published package is private by default. Make it public once in the package settings on GitHub.
