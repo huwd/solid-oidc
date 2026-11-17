@@ -10,6 +10,7 @@
 # Not covered by Dependabot; bump these by hand:
 # - .node-version, and the Node version in the Dockerfile's builder tag
 # - the gh-actions-lock extension version in verify-pins.yml
+# - the zizmor version in ci.yml, kept in step with nixpkgs in devenv
 # - devenv.lock (`devenv update`)
 
 version: 2

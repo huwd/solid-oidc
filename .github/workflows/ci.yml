@@ -81,6 +81,21 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run docs:lint
 
+  # zizmor audits the workflows for security problems. Configuration and its
+  # reasons are in zizmor.yml. Results are printed in the log rather than
+  # uploaded to code scanning, so the job stays read-only.
+  workflows:
+    name: Workflow audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: zizmorcore/zizmor-action@v0.8.1
+        with:
+          advanced-security: false
+          version: 1.32.0
+
   image:
     name: Image
     runs-on: ubuntu-latest

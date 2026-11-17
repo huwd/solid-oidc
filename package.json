@@ -13,11 +13,13 @@
     "check": "pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run docs:lint",
     "dev": "node --watch src/bin/main.ts",
     "docs:lint": "markdownlint-cli2",
+    "docs:prose": "git ls-files -z '*.md' | xargs --null vale",
     "format": "biome check --write .",
     "lint": "biome ci .",
     "start": "node src/bin/main.ts",
     "test": "node --test --experimental-test-coverage --test-coverage-include='src/**/*.ts' --test-coverage-include-all --test-coverage-exclude='src/**/*.test.ts' --test-coverage-exclude='src/bin/**' --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 'src/**/*.test.ts'",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "workflows:audit": "zizmor --offline ."
   },
   "dependencies": {
     "koa": "3.3.0",

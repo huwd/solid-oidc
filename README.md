@@ -22,7 +22,7 @@ The service reads its configuration from environment variables at startup. It st
 
 | Variable | Required | Default | Meaning |
 | -------- | -------- | ------- | ------- |
-| `ISSUER_URL` | Yes | | The issuer identifier Solid clients see, such as `https://id.example.org`. Must use https (http only on a loopback host), have no query, fragment or trailing slash, and be written in canonical form. |
+| `ISSUER_URL` | Yes | | The issuer identifier Solid clients see, such as `https://id.example.org`. Must use HTTPS (HTTP only on a loopback host), have no query, fragment or trailing slash, and be written in canonical form. |
 | `HOST` | No | `0.0.0.0` | Interface to listen on. |
 | `PORT` | No | `3000` | Port to listen on. |
 
@@ -43,13 +43,14 @@ The image runs as a non-root user on a distroless base, and has a built-in healt
 
 ## Development
 
-Development uses [devenv](https://devenv.sh/) for the toolchain: Node 26, pnpm, actionlint, shellcheck and sops.
+Development uses [devenv](https://devenv.sh/) for the toolchain: Node 26, pnpm, actionlint, shellcheck, sops, zizmor and Vale.
 
 ```sh
 devenv shell
 pnpm install
 pnpm run check      # lint, typecheck, test with coverage, docs lint
 pnpm run format     # apply Biome formatting and safe fixes
+pnpm run docs:prose # advisory prose and British spelling check
 ISSUER_URL=http://localhost:3000 pnpm run dev
 ```
 

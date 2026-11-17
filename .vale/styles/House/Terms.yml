@@ -1,0 +1,11 @@
+# Terminology the dictionary and vocabulary can't catch, because both
+# spellings are valid words.
+extends: substitution
+message: "Use '%s' instead of '%s'."
+level: error
+ignorecase: false
+swap:
+  '\bGithub\b|\bgithub\b': GitHub
+  '\bTypescript\b|\btypescript\b': TypeScript
+  '\bWebId\b|\bWebid\b|\bwebID\b': WebID
+  '\bPocketID\b|\bPocketId\b|\bpocket ID\b': Pocket ID

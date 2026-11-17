@@ -47,7 +47,7 @@ Vitest has a richer interface and watch mode, but adds a large dependency tree.
 ### Formatter and linter: Biome (chosen) or ESLint with Prettier
 
 Biome is one tool with no plugins, and is fast.
-ESLint with typescript-eslint has more type-aware rules, but needs several packages and their configuration.
+ESLint with `typescript-eslint` has more type-aware rules, but needs several packages and their configuration.
 Biome's type-aware rules, such as `noFloatingPromises`, are still in its nursery group and are enabled as errors.
 
 ### Package manager: pnpm (chosen) or npm
@@ -63,7 +63,7 @@ Its strict `node_modules` layout catches undeclared dependencies.
 - pnpm, pinned through `packageManager` in `package.json`, installs exact versions and waits 48 hours before accepting a new release.
 - Biome formats and lints. Lint warnings fail CI.
 - `node:test` runs `src/**/*.test.ts` with 100% coverage thresholds. Process entry points in `src/bin/` are excluded from coverage, and hold no logic of their own.
-- devenv provides Node, pnpm, actionlint, shellcheck and sops.
+- devenv provides Node, pnpm, actionlint, shellcheck, sops, zizmor, and Vale with British English spelling.
 - `pnpm run check` runs every check, and each CI job runs one of its parts.
 - The code follows the [GOV.UK One Login TypeScript style guide](https://github.com/govuk-one-login/agent-skills/pull/11), adapted in [`docs/code-style.md`](../code-style.md).
 

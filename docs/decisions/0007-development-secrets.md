@@ -26,11 +26,11 @@ The same tools and rules as the author's other repositories.
 Each use needs an approval, and only the wrapped command sees the values.
 It depends on the laptop's tooling, so another contributor would need their own age recipient added to `.sops.yaml`.
 
-### Plaintext .env files, ignored by Git
+### Plain .env files, ignored by Git
 
 Simple and common, but leaves secrets on disk in plain text, readable by any process.
 
-### devenv's secret integrations
+### Loading secrets through devenv
 
 devenv can load secrets into the shell.
 Every process in that shell would then see them, which breaks the rule against loading secrets through hooks.
