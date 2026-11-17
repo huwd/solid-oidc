@@ -1,4 +1,4 @@
-# Weekly updates with a seven-day cooldown: a new release waits a week before
+# Weekly updates with a two-day cooldown: a new release waits 48 hours before
 # Dependabot proposes it, so a compromised or broken release has time to be
 # noticed and pulled. pnpm's minimumReleaseAge applies the same wait locally.
 # Minor and patch updates arrive as one grouped pull request per ecosystem;
@@ -19,7 +19,7 @@ updates:
     schedule:
       interval: weekly
     cooldown:
-      default-days: 7
+      default-days: 2
     groups:
       github-actions-minor-and-patch:
         patterns: ["*"]
@@ -30,7 +30,7 @@ updates:
     schedule:
       interval: weekly
     cooldown:
-      default-days: 7
+      default-days: 2
     groups:
       npm-minor-and-patch:
         patterns: ["*"]
@@ -41,7 +41,7 @@ updates:
     schedule:
       interval: weekly
     cooldown:
-      default-days: 7
+      default-days: 2
     groups:
       docker-minor-and-patch:
         patterns: ["*"]

@@ -1,10 +1,10 @@
 # pnpm settings. This is a single-package repository; the file exists because
 # pnpm reads its settings from here.
 
-# Wait seven days before installing a newly published version, matching the
+# Wait 48 hours before installing a newly published version, matching the
 # Dependabot cooldown, so a compromised or broken release has time to be
 # noticed and pulled.
-minimumReleaseAge: 10080
+minimumReleaseAge: 2880
 
 # Record exact versions, so the manifest says what the lockfile installs.
 savePrefix: ""

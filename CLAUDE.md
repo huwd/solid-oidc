@@ -23,7 +23,7 @@ Node runs `.ts` files directly, by stripping types. There is no build step, so i
 - Write documentation in plain British English in the GOV.UK style.
 - Record significant decisions in [`docs/decisions/`](docs/decisions/README.md).
 - Add a user-facing change to `## [Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md) in the same commit. [`docs/releasing.md`](docs/releasing.md) covers releases.
-- Pin dependencies exactly. pnpm refuses versions published less than seven days ago.
+- Pin dependencies exactly. pnpm refuses versions published less than 48 hours ago.
 - Keep deployment-specific values, such as real domains, out of the repository. They belong in environment variables or the deployment configuration in Composer.
 
 ## Secrets

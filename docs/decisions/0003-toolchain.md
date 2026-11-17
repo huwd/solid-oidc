@@ -52,13 +52,15 @@ Biome's type-aware rules, such as `noFloatingPromises`, are still in its nursery
 
 ### Package manager: pnpm (chosen) or npm
 
-pnpm's `minimumReleaseAge` setting refuses package versions published less than seven days ago, matching the Dependabot cooldown.
+pnpm's `minimumReleaseAge` setting refuses package versions published less than 48 hours ago, matching the Dependabot cooldown.
+Recent compromised npm releases have typically been detected and pulled within hours, so two days covers that window without holding back fixes for long.
+The author's laptop configuration also shortened its Dependabot cooldown from seven days to two, in [its record 0020](https://huwd.github.io/declarative_laptop/decisions/0020-shorten-dependabot-cooldown-to-two-days/).
 Its strict `node_modules` layout catches undeclared dependencies.
 
 ## Decision
 
 - Node 26, pinned in `.node-version`, runs TypeScript sources directly. `tsc` only type-checks, with `strict` and the further strictness flags in `tsconfig.json`.
-- pnpm, pinned through `packageManager` in `package.json`, installs exact versions and waits seven days before accepting a new release.
+- pnpm, pinned through `packageManager` in `package.json`, installs exact versions and waits 48 hours before accepting a new release.
 - Biome formats and lints. Lint warnings fail CI.
 - `node:test` runs `src/**/*.test.ts` with 100% coverage thresholds. Process entry points in `src/bin/` are excluded from coverage, and hold no logic of their own.
 - devenv provides Node, pnpm, actionlint, shellcheck and sops.
@@ -69,5 +71,5 @@ Its strict `node_modules` layout catches undeclared dependencies.
 
 - Fewer dependencies to audit and update, and no build output to drift from the sources.
 - Local imports use the `.ts` extension.
-- Newly published versions of tools and libraries are unavailable for a week, including urgent fixes. Override deliberately, and record why, if a security fix cannot wait.
+- Newly published versions of tools and libraries are unavailable for 48 hours, including urgent fixes. Override deliberately, and record why, if a security fix cannot wait.
 - Biome and Node's coverage reporting are younger than the alternatives. Revisit if a missing lint rule or a coverage bug causes real problems.
