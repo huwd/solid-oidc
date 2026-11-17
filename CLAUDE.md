@@ -13,7 +13,7 @@ Run everything inside `devenv shell`, or prefix a command with `devenv shell --`
 | `pnpm run lint` / `typecheck` / `test` / `docs:lint` | One check each |
 | `pnpm run workflows:audit` | zizmor security audit of the workflows, also run in CI |
 | `pnpm run docs:prose` | Vale prose and British spelling check: advisory, local only |
-| `ISSUER_URL=http://localhost:3000 pnpm run dev` | Run with reload |
+| `pnpm run dev` | Run with reload, after setting the variables in the Configuration section of the README |
 | `docker build --tag solid-oidc:dev .` | Build the image |
 
 Node runs `.ts` files directly by stripping types, with no build step, so import local files with their `.ts` extension.

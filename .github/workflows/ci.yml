@@ -113,9 +113,23 @@ jobs:
           tags: solid-oidc:ci
       # Start the image and run its own healthcheck command, so a broken
       # entry point or missing file fails here rather than after release.
+      # The secret and accounts files are mounted, as in a deployment, so the
+      # image's non-root user must be able to read them.
       - name: Smoke test
         run: |
-          docker run --detach --name smoke --env ISSUER_URL=https://id.example.test solid-oidc:ci
+          config="${RUNNER_TEMP}/smoke"
+          mkdir -p "${config}"
+          printf 'smoke-test-only\n' > "${config}/upstream-secret"
+          printf '%s\n' '{"accounts":[{"upstreamIssuer":"https://auth.example.test","upstreamSubject":"smoke","webId":"https://alice.example.test/profile#me"}]}' > "${config}/accounts.json"
+          docker run --detach --name smoke \
+            --env ISSUER_URL=https://id.example.test \
+            --env DATA_DIR=/tmp \
+            --env UPSTREAM_ISSUER_URL=https://auth.example.test \
+            --env UPSTREAM_CLIENT_ID=solid-oidc \
+            --env UPSTREAM_CLIENT_SECRET_FILE=/config/upstream-secret \
+            --env ACCOUNTS_FILE=/config/accounts.json \
+            --volume "${config}:/config:ro" \
+            solid-oidc:ci
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
             if docker exec smoke /nodejs/bin/node src/bin/healthcheck.ts; then
               echo "Healthy after ${attempt} attempt(s)"
