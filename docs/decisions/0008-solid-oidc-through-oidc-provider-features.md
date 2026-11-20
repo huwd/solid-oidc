@@ -1,6 +1,6 @@
 # 0008. Meet Solid-OIDC through oidc-provider's own features
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Decided by:** @huwd
 - **Decided:** 2026-11-20
 - **Recorded:** 2026-11-20
