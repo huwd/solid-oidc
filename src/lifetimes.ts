@@ -1,6 +1,7 @@
 /**
- * How long the provider's tokens, sessions and interactions last, stated
- * here rather than left to oidc-provider's defaults.
+ * How long the provider's tokens, sessions and interactions last. Key
+ * rotation waits on these: a key can be removed only once nothing it signed
+ * can still be in use. See docs/decisions/0011-key-rotation.md.
  */
 
 /** Access tokens and ID tokens, which the signing key signs. */

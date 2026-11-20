@@ -58,7 +58,7 @@ export type KeyFile = {
 export const keysFileName = "keys.json";
 
 /** The most keys of each kind the file holds. */
-const keysMax = 10;
+export const keysMax = 10;
 
 const keysFileVersion = 2;
 const cookieKeyBytes = 32;
@@ -130,7 +130,7 @@ export function newKeyFile(now: number): KeyFile {
 }
 
 /** A fresh cookie key, added at `now`. */
-function newCookieKey(now: number): CookieKeyEntry {
+export function newCookieKey(now: number): CookieKeyEntry {
   return {
     addedAt: new Date(now).toISOString(),
     key: randomBytes(cookieKeyBytes).toString("base64url"),
@@ -311,7 +311,7 @@ function serialise(file: KeyFile): string {
 }
 
 /** Generate a fresh ES256 signing key, whose ID is its thumbprint. */
-function generateSigningKey(): SigningKey {
+export function generateSigningKey(): SigningKey {
   const { privateKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
   const jwk = privateKey.export({ format: "jwk" });
   /* node:coverage ignore next 4 */

@@ -51,7 +51,7 @@ export function createProvider(options: CreateProviderOptions): Provider {
     interactions: { url: interactionUrlFor(prefix) },
     renderError,
     jwks: { keys: options.keys.signingKeys.map((key) => ({ ...key })) },
-    // Stated explicitly, in lifetimes.ts, rather than left to the defaults.
+    // Set explicitly, because key rotation's waits depend on them.
     ttl: {
       AccessToken: tokenLifetimeSeconds,
       Grant: sessionLifetimeSeconds,
