@@ -65,6 +65,8 @@ The stand-in upstream provider imitates Pocket ID:
 - ID tokens are signed with RS256
 - it also returns email and username claims, which the broker must ignore
 
+Like Pocket ID, it keeps its own session. If the broker loses a session, the stand-in logs the same person straight back in, so a test that only checks the login reaches the app can't tell. To check that the broker's own session answered, use `visitUsingBrokerSession`, which stops if the login goes to the upstream provider.
+
 ## Injected fetch
 
 Code that calls the network takes a `fetch` function, rather than calling the global one. Tests pass a fake, so timeouts, size limits and bad responses need no slow or misbehaving servers.

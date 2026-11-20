@@ -12,6 +12,7 @@ import {
   startHarness,
   testApp,
   visitUntilPage,
+  visitUsingBrokerSession,
 } from "./test-support/login-harness.ts";
 
 const root = mkdtempSync(join(tmpdir(), "solid-oidc-restart-"));
@@ -51,11 +52,10 @@ describe("restarting the broker", () => {
     );
     assert.ok(refreshed.access_token, "expected the refresh token to work after the restart");
 
-    // If the session were lost, the broker would ask the upstream provider
-    // again, which now logs in someone with no WebID and is refused.
-    harness.upstream.logInAs("ffffffff-0000-4000-8000-000000000bad");
+    // If the session were lost, the broker would send the browser to the
+    // upstream provider again.
     const again = await appLogin(harness);
-    const returned = await visitUntilPage(harness, again.authorizationUrl);
+    const returned = await visitUsingBrokerSession(harness, again.authorizationUrl);
     assert.ok(
       returned.url.searchParams.has("code"),
       `expected the session to survive, got ${returned.status} ${returned.url.href}`,

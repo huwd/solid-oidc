@@ -164,6 +164,19 @@ export function visitUntilPage(
   return harness.browser.visit(url, { method, stopAt: toApp });
 }
 
+/**
+ * Follow a login that the broker's own session should answer, stopping if it
+ * returns to the app or goes to the upstream provider. The stand-in upstream
+ * keeps its own session, so a lost broker session would otherwise be hidden
+ * by the upstream logging the same person straight back in.
+ */
+export function visitUsingBrokerSession(harness: Harness, url: URL | string): Promise<Visit> {
+  const upstreamOrigin = new URL(harness.upstream.issuer).origin;
+  return harness.browser.visit(url, {
+    stopAt: (location) => toApp(location) || location.origin === upstreamOrigin,
+  });
+}
+
 export function formAction(page: Visit, button: "Allow" | "Deny"): URL {
   const forms = [
     ...page.body.matchAll(/<form method="post" action="([^"]+)"><button type="submit">(\w+)/g),
