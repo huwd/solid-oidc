@@ -100,6 +100,9 @@ console.log(
     port: server.port,
     upstreamIssuer: config.upstream.issuer,
     upstreamRedirectUri: upstreamRedirectUri(config.issuer),
+    // After a key command and a restart, these show the change took effect.
+    signingKeyId: keys.value.signingKeys[0]?.kid,
+    publishedKeyIds: keys.value.signingKeys.map((key) => key.kid),
   }),
 );
 

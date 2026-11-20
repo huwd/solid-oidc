@@ -37,6 +37,7 @@ Test a whole flow through the broker's HTTP interface, with real implementations
 - `login.test.ts` logs in through the stand-in upstream provider and checks every refusal.
 - `solid.test.ts` checks discovery, DPoP, the claims and signature of the access token, and Client ID Documents.
 - `restart.test.ts` restarts the broker and checks sessions and refresh tokens survive.
+- `rotation.test.ts` rotates keys between restarts, and checks which tokens and sessions still work.
 
 ### Compatibility tests
 
@@ -48,7 +49,7 @@ Helpers shared between test files live in `src/test-support/`. The test script l
 
 | Helper | Use it to |
 | ------ | --------- |
-| `login-harness.ts` | Start the broker, the stand-in upstream and a browser together, start an app's login, exchange a code with DPoP, and restart the broker |
+| `login-harness.ts` | Start the broker, the stand-in upstream and a browser together, start an app's login, exchange a code with DPoP, and restart the broker, optionally with new keys |
 | `tokens.ts` | Decode a token, list the broker's published keys, and check a signature as a Solid server does |
 | `upstream-provider.ts` | Run an `oidc-provider` instance configured like Pocket ID, which logs in whichever subject the test chooses |
 | `browser.ts` | Follow redirects and keep cookies per origin, post forms, and stop at or rewrite a redirect |

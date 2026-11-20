@@ -1,5 +1,5 @@
 import { createHash, generateKeyPairSync, randomBytes } from "node:crypto";
-import { link, mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
+import { link, mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 
@@ -187,8 +187,8 @@ async function loadOrCreateKeyFile(options: {
 }
 
 /**
- * Read the key file, with when each key was added. Unlike a start, a missing
- * file is an error.
+ * Read the key file for a key command. Unlike a start, a missing file is an
+ * error: there are no keys to rotate.
  */
 export async function readKeyFile(dataDir: string): Promise<Result<KeyFile>> {
   const path = join(dataDir, keysFileName);
@@ -200,6 +200,24 @@ export async function readKeyFile(dataDir: string): Promise<Result<KeyFile>> {
     };
   }
   return read.result;
+}
+
+/**
+ * Replace the key file. The new contents are written to a temporary file
+ * readable only by its owner, then renamed into place, so a reader sees
+ * either the old file or the new one, never part of either.
+ */
+export async function replaceKeyFile(dataDir: string, file: KeyFile): Promise<Result<void>> {
+  const path = join(dataDir, keysFileName);
+  const temporaryPath = temporaryPathFor(path);
+  try {
+    await writeFile(temporaryPath, serialise(file), { flag: "wx", mode: keysFileMode });
+    await rename(temporaryPath, path);
+  } catch (error) {
+    await unlink(temporaryPath).catch(() => undefined);
+    return { ok: false, errors: [`DATA_DIR: could not write ${path} (${errorCode(error)})`] };
+  }
+  return { ok: true, value: undefined };
 }
 
 type ReadOutcome =

@@ -12,6 +12,7 @@ import {
   newKeyFile,
   providerKeys,
   readKeyFile,
+  replaceKeyFile,
 } from "./keys.ts";
 
 const temporaryRoot = await mkdtemp(join(tmpdir(), "solid-oidc-keys-"));
@@ -286,7 +287,7 @@ describe("providerKeys", () => {
   });
 });
 
-describe("readKeyFile", () => {
+describe("readKeyFile and replaceKeyFile", () => {
   it("reports a missing key file", async () => {
     const dataDir = freshDataDir();
 
@@ -295,6 +296,33 @@ describe("readKeyFile", () => {
     assert.ok(!result.ok, "expected a missing file to be reported");
     assert.deepEqual(result.errors, [
       `DATA_DIR: ${join(dataDir, keysFileName)} does not exist. Start the broker once to create it.`,
+    ]);
+  });
+
+  it("replaces the key file, readable only by its owner, with no temporary files left", async () => {
+    const dataDir = freshDataDir();
+    await loadOrCreateKeys({ dataDir, now: Date.now });
+    const replacement = newKeyFile(Date.parse("2026-01-02T03:04:05.000Z"));
+
+    const written = await replaceKeyFile(dataDir, replacement);
+    const read = await readKeyFile(dataDir);
+
+    assert.ok(written.ok && read.ok, "expected the file to be replaced and read back");
+    assert.deepEqual(read.value, replacement);
+    const mode = (await stat(join(dataDir, keysFileName))).mode & 0o777;
+    assert.equal(mode, 0o600, `expected mode 600, got ${mode.toString(8)}`);
+    const { readdir } = await import("node:fs/promises");
+    assert.deepEqual(await readdir(dataDir), [keysFileName]);
+  });
+
+  it("reports a key file that cannot be written", async () => {
+    const dataDir = join(freshDataDir(), "missing");
+
+    const result = await replaceKeyFile(dataDir, newKeyFile(Date.now()));
+
+    assert.ok(!result.ok, "expected a missing directory to be reported");
+    assert.deepEqual(result.errors, [
+      `DATA_DIR: could not write ${join(dataDir, keysFileName)} (ENOENT)`,
     ]);
   });
 });

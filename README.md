@@ -108,7 +108,7 @@ Later starts reuse both, so people stay logged in and refresh tokens keep workin
 - Both are created readable only by their owner (mode 600). The broker refuses to start if anyone else can read them.
 - The database has a schema version. The broker refuses to start against a database with a version it doesn't know, such as one written by a newer release.
 - Expired records are removed every five minutes, up to 1,000 at a time.
-- Deleting `keys.json` makes the broker generate new keys on the next start, which invalidates every token it has issued.
+- Don't delete `keys.json` to replace the keys. [Rotate them](#rotating-keys) instead.
 - Client ID Documents are cached in memory only, so the broker fetches them again after a restart.
 
 ### Backing up and restoring
@@ -133,6 +133,30 @@ To restore:
 4. Check both are mode 600 and owned by the broker's user, then start the broker.
 
 Test a restore before relying on your backups.
+
+### Rotating keys
+
+The broker signs tokens with one key and publishes it, with any older keys, at its JWKS URL. Solid servers check tokens against those published keys. Cookies are signed with a separate cookie key.
+
+The `keys` command changes `keys.json`. Run it in the container, and restart the broker after each change, since the broker reads its keys only when it starts:
+
+```sh
+docker exec solid-oidc /nodejs/bin/node src/bin/keys.ts list
+docker restart solid-oidc
+```
+
+When the broker starts, its log names the key that signs tokens and every key it publishes.
+
+#### Replace keys as routine
+
+A planned rotation takes about 75 minutes and logs nobody out:
+
+1. `rotate` publishes a new signing key without signing with it, and starts signing cookies with a new cookie key. Restart the broker straight away.
+2. After 10 minutes, `promote` starts signing tokens with the new key. Solid servers cache the published keys, so the wait lets them see the new key first. Restart the broker.
+3. After a further 65 minutes, `retire` removes the old signing key. By then every token it signed has expired. Restart the broker.
+4. After 14 days, `retire` again removes the old cookie key, once every session it signed has expired. Restart the broker.
+
+Each command refuses to run before it is safe to, and says when it can. `--skip-wait` overrides the wait for `promote` and `retire`, but tokens or sessions that depend on an old key stop working.
 
 ## Running the image
 
