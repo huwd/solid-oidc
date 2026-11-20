@@ -1,11 +1,19 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { createApp, healthPath } from "./app.ts";
+import { createApp as createBrokerApp, healthPath } from "./app.ts";
 import { checkHealth } from "./healthcheck.ts";
+import { generateProviderKeys } from "./keys.ts";
+import { createProvider } from "./provider.ts";
 import { startServer } from "./server.ts";
 
 const timeoutMs = 2_000;
+const issuer = "https://id.example.test";
+const keys = generateProviderKeys();
+
+function createApp() {
+  return createBrokerApp({ issuer, provider: createProvider({ issuer, keys }) });
+}
 
 describe("server", () => {
   it("answers the health endpoint with ok", async () => {

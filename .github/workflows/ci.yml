@@ -114,7 +114,8 @@ jobs:
       # Start the image and run its own healthcheck command, so a broken
       # entry point or missing file fails here rather than after release.
       # The secret and accounts files are mounted, as in a deployment, so the
-      # image's non-root user must be able to read them.
+      # image's non-root user must be able to read them. DATA_DIR is the
+      # image's default, /data, which the broker must be able to write.
       - name: Smoke test
         run: |
           config="${RUNNER_TEMP}/smoke"
@@ -123,7 +124,6 @@ jobs:
           printf '%s\n' '{"accounts":[{"upstreamIssuer":"https://auth.example.test","upstreamSubject":"smoke","webId":"https://alice.example.test/profile#me"}]}' > "${config}/accounts.json"
           docker run --detach --name smoke \
             --env ISSUER_URL=https://id.example.test \
-            --env DATA_DIR=/tmp \
             --env UPSTREAM_ISSUER_URL=https://auth.example.test \
             --env UPSTREAM_CLIENT_ID=solid-oidc \
             --env UPSTREAM_CLIENT_SECRET_FILE=/config/upstream-secret \
@@ -133,6 +133,8 @@ jobs:
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
             if docker exec smoke /nodejs/bin/node src/bin/healthcheck.ts; then
               echo "Healthy after ${attempt} attempt(s)"
+              docker exec smoke /nodejs/bin/node --eval \
+                "require('node:fs').accessSync('/data/keys.json')"
               exit 0
             fi
             sleep 1

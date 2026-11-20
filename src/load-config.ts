@@ -1,6 +1,6 @@
 import { type AccountStore, createStaticAccountStore, parseAccounts } from "./accounts.ts";
 import { type Environment, parseEnvironment, type SecretSource } from "./config.ts";
-import type { Result } from "./validation.ts";
+import { errorCode, type Result } from "./validation.ts";
 
 /** Runtime configuration: environment variables plus the files they name. */
 export type Config = {
@@ -124,13 +124,4 @@ async function readFileResult(options: {
       errors: [`${options.variable}: could not read ${options.path} (${errorCode(error)})`],
     };
   }
-}
-
-// Node file system errors carry a short code such as ENOENT or EACCES, which
-// says what to fix without repeating anything from the file.
-function errorCode(error: unknown): string {
-  if (error instanceof Error && "code" in error && typeof error.code === "string") {
-    return error.code;
-  }
-  return "unknown error";
 }

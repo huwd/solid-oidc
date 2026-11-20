@@ -7,23 +7,35 @@ import { once } from "node:events";
 import { readFile } from "node:fs/promises";
 
 import { createApp } from "../app.ts";
+import { loadOrCreateKeys } from "../keys.ts";
 import { loadConfig } from "../load-config.ts";
+import { createProvider } from "../provider.ts";
 import { startServer } from "../server.ts";
 
-const result = await loadConfig({
-  environment: process.env,
-  readTextFile: (path) => readFile(path, { encoding: "utf8" }),
-});
-if (!result.ok) {
-  for (const error of result.errors) {
+function exitWithErrors(errors: readonly string[]): never {
+  for (const error of errors) {
     console.error(JSON.stringify({ level: "error", message: "Invalid configuration", error }));
   }
   process.exit(1);
 }
 
-const config = result.value;
+const loaded = await loadConfig({
+  environment: process.env,
+  readTextFile: (path) => readFile(path, { encoding: "utf8" }),
+});
+if (!loaded.ok) {
+  exitWithErrors(loaded.errors);
+}
+const config = loaded.value;
+
+const keys = await loadOrCreateKeys(config.dataDir);
+if (!keys.ok) {
+  exitWithErrors(keys.errors);
+}
+
+const provider = createProvider({ issuer: config.issuer, keys: keys.value });
 await using server = await startServer({
-  app: createApp(),
+  app: createApp({ issuer: config.issuer, provider }),
   host: config.host,
   port: config.port,
 });

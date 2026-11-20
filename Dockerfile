@@ -14,19 +14,26 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN npm install --global "$(node --print 'require("./package.json").packageManager')" \
   && pnpm install --frozen-lockfile --prod
 
+# The data directory must belong to the non-root user, so the broker can write
+# its keys. A named volume mounted here copies this ownership when created.
+RUN mkdir /data
+
 FROM gcr.io/distroless/nodejs26-debian13:nonroot@sha256:1d736cf8b5716c07a245301f92717143215d248fd55771ee1936ef4b3302e531
 
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV DATA_DIR=/data
 
+COPY --from=dependencies --chown=nonroot:nonroot /data /data
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY package.json ./
 COPY src ./src
 
 USER nonroot
 EXPOSE 3000
+VOLUME /data
 
 # Exec form, with a long interval: Synology's kernel can leave shell-based
 # healthchecks stuck in uninterruptible sleep under I/O pressure.
