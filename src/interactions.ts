@@ -36,11 +36,12 @@ const uidPattern = "[A-Za-z0-9_-]{1,64}";
 const interactionRoute = new RegExp(`^/interaction/(${uidPattern})(?:/(upstream|confirm|abort))?$`);
 const stateUid = new RegExp(`^(${uidPattern})\\.`);
 
-// Resource indicators are turned off, so consent covers only OpenID scopes
-// and claims.
+// What the provider says the grant lacks: OpenID scopes and claims, and
+// scopes for the Solid resource, the only resource the broker issues for.
 const ConsentDetails = z.object({
   missingOIDCClaims: z.array(z.string()).optional(),
   missingOIDCScope: z.array(z.string()).optional(),
+  missingResourceScopes: z.record(z.string(), z.array(z.string())).optional(),
 });
 
 /**
@@ -220,10 +221,14 @@ async function confirmConsent(input: {
     grant.addOIDCScope(details.missingOIDCScope);
   }
   /* node:coverage ignore next 5 */
-  // Unreachable until the broker supports a claim beyond `sub`, which
-  // oidc-provider never asks consent for. The webid claim (#7) changes that.
+  // Unreachable: the claims request parameter is turned off, so a client can
+  // ask for claims, such as webid, only through scopes.
   if (details.missingOIDCClaims !== undefined) {
     grant.addOIDCClaims(details.missingOIDCClaims);
+  }
+
+  for (const [resource, scopes] of Object.entries(details.missingResourceScopes ?? {})) {
+    grant.addResourceScope(resource, scopes);
   }
 
   const grantId = await grant.save();

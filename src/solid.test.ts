@@ -1,0 +1,324 @@
+import assert from "node:assert/strict";
+import { createHash, createPublicKey, verify } from "node:crypto";
+import { describe, it } from "node:test";
+
+import {
+  clientDocumentFetch,
+  solidConfiguration,
+  solidOidcSupported,
+  solidResource,
+} from "./solid.ts";
+import {
+  createClientDocuments,
+  jsonLd,
+  solidAppDocument,
+} from "./test-support/client-documents.ts";
+import {
+  aliceWebId,
+  appLogin,
+  appOrigin,
+  exchangeAtBroker,
+  formAction,
+  type Harness,
+  startHarness,
+  visitUntilPage,
+} from "./test-support/login-harness.ts";
+
+const clientId = `${appOrigin}/clientid.jsonld`;
+const solidApp = { client_id: clientId, redirect_uris: [`${appOrigin}/callback`] } as const;
+
+/** Log in with a Client ID Document app, through consent, to the app's callback. */
+async function logInAsSolidApp(harness: Harness, extra: Record<string, string> = {}) {
+  const login = await appLogin(harness, solidApp, {
+    scope: "openid webid offline_access",
+    ...extra,
+  });
+  const consent = await visitUntilPage(harness, login.authorizationUrl);
+  const callback = await visitUntilPage(harness, formAction(consent, "Allow"), "POST");
+  return { callback, consent, login };
+}
+
+function decodeJwt(jwt: string): {
+  readonly header: Record<string, unknown>;
+  readonly payload: Record<string, unknown>;
+} {
+  const [header = "", payload = ""] = jwt.split(".");
+  return {
+    header: JSON.parse(Buffer.from(header, "base64url").toString("utf8")),
+    payload: JSON.parse(Buffer.from(payload, "base64url").toString("utf8")),
+  };
+}
+
+// Check the token's signature against the broker's published keys, as a
+// Solid server would.
+async function assertSignedByBroker(harness: Harness, jwt: string): Promise<void> {
+  const discovery = (await (
+    await fetch(`${harness.issuer}/.well-known/openid-configuration`)
+  ).json()) as {
+    jwks_uri: string;
+  };
+  const jwks = (await (await fetch(discovery.jwks_uri)).json()) as {
+    keys: (import("node:crypto").webcrypto.JsonWebKey & { kid: string })[];
+  };
+  const { header } = decodeJwt(jwt);
+  const jwk = jwks.keys.find((key) => key.kid === header["kid"]);
+  assert.ok(jwk, "expected the token's key in the broker's JWKS");
+  const [encodedHeader, encodedPayload, signature = ""] = jwt.split(".");
+  const valid = verify(
+    "sha256",
+    Buffer.from(`${encodedHeader}.${encodedPayload}`),
+    { dsaEncoding: "ieee-p1363", key: createPublicKey({ format: "jwk", key: jwk }) },
+    Buffer.from(signature, "base64url"),
+  );
+  assert.ok(valid, "expected a valid ES256 signature");
+}
+
+async function jwkThumbprint(publicKey: CryptoKey): Promise<string> {
+  const { crv, kty, x, y } = await crypto.subtle.exportKey("jwk", publicKey);
+  return createHash("sha256").update(JSON.stringify({ crv, kty, x, y })).digest("base64url");
+}
+
+function servingSolidApp(overrides: Record<string, unknown> = {}) {
+  const documents = createClientDocuments();
+  documents.serve(clientId, () => jsonLd(solidAppDocument(clientId, overrides)));
+  return documents;
+}
+
+describe("discovery", () => {
+  it("advertises Solid-OIDC, the webid scope and DPoP", async () => {
+    await using harness = await startHarness();
+
+    const response = await fetch(`${harness.issuer}/.well-known/openid-configuration`);
+    const discovery = (await response.json()) as Record<string, unknown>;
+
+    assert.equal(discovery["solid_oidc_supported"], solidOidcSupported);
+    assert.ok((discovery["scopes_supported"] as string[]).includes("webid"));
+    assert.ok((discovery["claims_supported"] as string[]).includes("webid"));
+    assert.ok(Array.isArray(discovery["dpop_signing_alg_values_supported"]));
+  });
+});
+
+describe("tokens for a Solid app", () => {
+  it("issues a DPoP-bound JWT access token carrying the WebID, client and audience", async () => {
+    await using harness = await startHarness({ fetch: servingSolidApp().fetch });
+    const { callback, login } = await logInAsSolidApp(harness);
+
+    const { keyPair, tokens } = await exchangeAtBroker(harness, login, callback.url, { clientId });
+
+    assert.equal(tokens.token_type.toLowerCase(), "dpop");
+    const { payload } = decodeJwt(tokens.access_token);
+    assert.equal(payload["webid"], aliceWebId);
+    assert.equal(payload["client_id"], clientId);
+    assert.deepEqual(payload["cnf"], { jkt: await jwkThumbprint(keyPair.publicKey) });
+    const audience = [payload["aud"]].flat();
+    assert.ok(
+      audience.includes("solid"),
+      `expected solid in the audience, got ${String(audience)}`,
+    );
+    await assertSignedByBroker(harness, tokens.access_token);
+  });
+
+  it("puts the WebID in the ID token", async () => {
+    await using harness = await startHarness({ fetch: servingSolidApp().fetch });
+    const { callback, login } = await logInAsSolidApp(harness);
+
+    const { tokens } = await exchangeAtBroker(harness, login, callback.url, { clientId });
+
+    const claims = tokens.claims();
+    assert.equal(claims?.["webid"], aliceWebId);
+    assert.equal(claims?.sub, aliceWebId);
+  });
+
+  it("refuses a token request without a DPoP proof", async () => {
+    await using harness = await startHarness({ fetch: servingSolidApp().fetch });
+    const { callback, login } = await logInAsSolidApp(harness);
+
+    await assert.rejects(
+      exchangeAtBroker(harness, login, callback.url, { clientId, dpop: false }),
+      // oidc-provider hides the reason, "DPoP proof JWT not provided", behind
+      // a generic invalid_grant. The same exchange with a proof succeeds in
+      // the tests above.
+      (error: Error & { error?: string }) => {
+        assert.equal(error.error, "invalid_grant");
+        return true;
+      },
+    );
+  });
+
+  it("refuses a resource other than Solid", async () => {
+    await using harness = await startHarness({ fetch: servingSolidApp().fetch });
+    const login = await appLogin(harness, solidApp, {
+      resource: "https://elsewhere.example.test/",
+      scope: "openid webid",
+    });
+
+    const visit = await visitUntilPage(harness, login.authorizationUrl);
+
+    assert.equal(visit.url.searchParams.get("error"), "invalid_target");
+  });
+});
+
+describe("Client ID Documents", () => {
+  it("accepts a JSON-LD document, asks for JSON-LD, and names the app on the consent page", async () => {
+    const documents = servingSolidApp();
+    await using harness = await startHarness({ fetch: documents.fetch });
+
+    const { consent } = await logInAsSolidApp(harness);
+
+    assert.match(
+      consent.body,
+      /Solid Test App \(<code>https:\/\/app\.example\.test\/clientid\.jsonld<\/code>\)/,
+    );
+    assert.match(documents.requests[0]?.headers.get("accept") ?? "", /^application\/ld\+json/);
+  });
+
+  it("reuses a fetched document rather than fetching it for every login", async () => {
+    const documents = servingSolidApp();
+    await using harness = await startHarness({ fetch: documents.fetch });
+
+    await logInAsSolidApp(harness);
+    // The app already has a grant, so this login returns straight to it.
+    const again = await appLogin(harness, solidApp, { scope: "openid webid offline_access" });
+    const callback = await visitUntilPage(harness, again.authorizationUrl);
+
+    assert.ok(callback.url.searchParams.has("code"), `expected a code, got ${callback.url.href}`);
+    assert.equal(documents.requests.length, 1);
+  });
+
+  /** Start a login and expect the broker to refuse the client outright. */
+  async function assertClientRefused(harness: Harness, id = clientId) {
+    const login = await appLogin(harness, {
+      client_id: id,
+      redirect_uris: [`${appOrigin}/callback`],
+    });
+
+    const visit = await visitUntilPage(harness, login.authorizationUrl);
+
+    // An unknown client can't be trusted with a redirect, so the broker
+    // shows the error itself.
+    assert.equal(visit.status, 400, `expected the client to be refused, got ${visit.status}`);
+    assert.notEqual(visit.url.origin, appOrigin);
+    assert.match(visit.body, /invalid_client/);
+  }
+
+  it("refuses a document that names a different client_id", async () => {
+    const documents = servingSolidApp({ client_id: `${appOrigin}/someone-else` });
+    await using harness = await startHarness({ fetch: documents.fetch });
+
+    await assertClientRefused(harness);
+  });
+
+  const refusedResponses: readonly (readonly [
+    string,
+    (request: Request) => Response | Promise<Response>,
+  ])[] = [
+    ["a missing document", () => new Response("not found", { status: 404 })],
+    [
+      "a redirect",
+      () => new Response(null, { headers: { location: `${appOrigin}/elsewhere` }, status: 302 }),
+    ],
+    [
+      "a body that isn't JSON",
+      () => new Response("<html></html>", { headers: { "content-type": "text/html" } }),
+    ],
+    [
+      "an oversized document",
+      () => jsonLd(solidAppDocument(clientId, { padding: "x".repeat(6_000) })),
+    ],
+    [
+      "a document that takes too long",
+      (request) =>
+        new Promise((_resolve, reject) => {
+          request.signal.addEventListener("abort", () => reject(request.signal.reason));
+        }),
+    ],
+  ];
+
+  for (const [name, respond] of refusedResponses) {
+    it(`refuses ${name}`, async () => {
+      const documents = createClientDocuments();
+      documents.serve(clientId, respond);
+      await using harness = await startHarness({ fetch: documents.fetch });
+
+      await assertClientRefused(harness);
+    });
+  }
+
+  it("refuses a document that can't be reached", async () => {
+    await using harness = await startHarness({ fetch: createClientDocuments().fetch });
+
+    await assertClientRefused(harness);
+  });
+
+  it("never fetches a client_id that isn't an HTTPS URL", async () => {
+    const documents = createClientDocuments();
+    await using harness = await startHarness({ fetch: documents.fetch });
+
+    await assertClientRefused(harness, "http://app.example.test/clientid.jsonld");
+
+    assert.equal(documents.requests.length, 0);
+  });
+
+  it("never fetches a client_id on the broker's or the upstream provider's origin", async () => {
+    const documents = createClientDocuments();
+    await using harness = await startHarness({ fetch: documents.fetch });
+    const impostors = [
+      `https://${new URL(harness.issuer).host}/fake-client`,
+      `https://${new URL(harness.upstream.issuer).host}/fake-client`,
+    ];
+
+    for (const impostor of impostors) {
+      await assertClientRefused(harness, impostor);
+    }
+
+    assert.deepEqual(
+      documents.requests.map((request) => request.url),
+      [],
+      "expected neither impostor to be fetched",
+    );
+  });
+});
+
+describe("solidConfiguration", () => {
+  const configuration = solidConfiguration({
+    fetch: globalThis.fetch,
+    issuer: "https://id.example.test",
+    upstreamIssuer: "https://auth.example.test",
+  });
+
+  it("adds the WebID only to access tokens", () => {
+    const context = undefined as never;
+
+    assert.deepEqual(
+      configuration.extraTokenClaims(context, { accountId: aliceWebId, kind: "AccessToken" }),
+      {
+        webid: aliceWebId,
+      },
+    );
+    assert.equal(configuration.extraTokenClaims(context, { kind: "ClientCredentials" }), undefined);
+  });
+
+  it("describes the Solid resource", () => {
+    const info = configuration.features.resourceIndicators.getResourceServerInfo(
+      undefined as never,
+      solidResource,
+    );
+
+    assert.equal(info.audience, "solid");
+    assert.equal(info.accessTokenFormat, "jwt");
+  });
+});
+
+describe("clientDocumentFetch", () => {
+  it("keeps the other headers and options it is given", async () => {
+    const documents = createClientDocuments();
+    documents.serve(clientId, () => jsonLd({}));
+    const signal = AbortSignal.timeout(1_000);
+
+    await clientDocumentFetch(documents.fetch)(clientId, { headers: { "user-agent": "" }, signal });
+
+    const [request] = documents.requests;
+    assert.equal(request?.headers.get("user-agent"), "");
+    assert.match(request?.headers.get("accept") ?? "", /application\/ld\+json/);
+  });
+});

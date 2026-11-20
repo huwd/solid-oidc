@@ -4,13 +4,16 @@ import Provider, { type ClientMetadata, type Configuration, type FindAccount } f
 
 import type { AccountStore } from "./accounts.ts";
 import type { ProviderKeys } from "./keys.ts";
+import { pageHeaders, renderErrorPage } from "./pages.ts";
+import { type SolidConfigurationOptions, solidConfiguration } from "./solid.ts";
 
-export type CreateProviderOptions = {
+export type CreateProviderOptions = SolidConfigurationOptions & {
   readonly accounts: AccountStore;
-  /** Clients registered in advance. Solid apps will use Client ID Documents. */
+  /**
+   * Clients registered in advance, for tests. Solid apps identify themselves
+   * with Client ID Documents instead.
+   */
   readonly clients: readonly ClientMetadata[];
-  /** The broker's issuer identifier, exactly as configured. */
-  readonly issuer: string;
   readonly keys: ProviderKeys;
 };
 
@@ -20,19 +23,20 @@ export type CreateProviderOptions = {
  */
 export function createProvider(options: CreateProviderOptions): Provider {
   const prefix = issuerPath(options.issuer);
+  const solid = solidConfiguration(options);
   const configuration: Configuration = {
-    // The broker's only signing key is ES256, and oidc-provider would
-    // otherwise expect an RSA key for any client that doesn't name one.
-    clientDefaults: { id_token_signed_response_alg: "ES256" },
+    ...solid,
     clients: options.clients.map((client) => ({ ...client })),
     cookies: { keys: [...options.keys.cookieKeys] },
     features: {
+      ...solid.features,
       // The development views accept any username and password. They must
-      // never be reachable, even before the real login exists.
+      // never be reachable.
       devInteractions: { enabled: false },
     },
     findAccount: accountFinder(options.accounts),
     interactions: { url: interactionUrlFor(prefix) },
+    renderError,
     jwks: { keys: options.keys.signingKeys.map((key) => ({ ...key })) },
   };
 
@@ -41,6 +45,24 @@ export function createProvider(options: CreateProviderOptions): Provider {
   // them makes every URL the provider builds start with the issuer.
   provider.proxy = true;
   return provider;
+}
+
+/**
+ * Show an error the provider can't send back to the app, such as an unknown
+ * client, on the broker's own page. The error code and description come from
+ * oidc-provider, not from the request, and the page escapes them anyway.
+ */
+export function renderError(
+  context: Koa.Context,
+  out: { readonly error: string; readonly error_description?: string | undefined },
+): void {
+  const reason =
+    out.error_description === undefined ? out.error : `${out.error}: ${out.error_description}`;
+  context.set(pageHeaders);
+  context.body = renderErrorPage({
+    heading: "The app's request was refused",
+    message: `Go back to the app and try again. If this keeps happening, tell the app's developer (${reason}).`,
+  });
 }
 
 /** The path the provider's routes live under: empty for a bare origin. */
@@ -71,7 +93,7 @@ export function accountFinder(accounts: AccountStore): FindAccount {
     if (!(await accounts.hasWebId(webId))) {
       return undefined;
     }
-    return { accountId: webId, claims: () => ({ sub: webId }) };
+    return { accountId: webId, claims: () => ({ sub: webId, webid: webId }) };
   };
 }
 

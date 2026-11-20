@@ -1,9 +1,16 @@
 import assert from "node:assert/strict";
 import { request } from "node:http";
 import { describe, it } from "node:test";
+import type Koa from "koa";
 
 import { createStaticAccountStore } from "./accounts.ts";
-import { accountFinder, interactionUrl, interactionUrlFor, issuerPath } from "./provider.ts";
+import {
+  accountFinder,
+  interactionUrl,
+  interactionUrlFor,
+  issuerPath,
+  renderError,
+} from "./provider.ts";
 import { type RunningServer, startServer } from "./server.ts";
 import { createTestBrokerApp, testBrokerKeys as keys } from "./test-support/broker-app.ts";
 
@@ -193,17 +200,30 @@ describe("accountFinder", () => {
     ]),
   );
 
-  it("loads a mapped WebID as an account whose subject is the WebID", async () => {
+  it("loads a mapped WebID as an account whose subject and webid claim are the WebID", async () => {
     const account = await findAccount(undefined as never, webId);
 
     assert.equal(account?.accountId, webId);
-    assert.deepEqual(await account?.claims("id_token", "openid", {}, []), { sub: webId });
+    assert.deepEqual(await account?.claims("id_token", "openid", {}, []), {
+      sub: webId,
+      webid: webId,
+    });
   });
 
   it("loads nothing for a WebID that is no longer mapped", async () => {
     const account = await findAccount(undefined as never, "https://mallory.example.test/#me");
 
     assert.equal(account, undefined);
+  });
+});
+
+describe("renderError", () => {
+  it("shows the error code alone when there is no description", () => {
+    const context = { body: "", set: () => undefined } as unknown as Koa.Context;
+
+    renderError(context, { error: "invalid_request" });
+
+    assert.match(String(context.body), /\(invalid_request\)/);
   });
 });
 

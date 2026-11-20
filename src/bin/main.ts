@@ -38,8 +38,13 @@ if (!keys.ok) {
 const provider = createProvider({
   accounts: config.accounts,
   clients: [],
+  // oidc-provider adds its own timeout and refuses private and loopback
+  // addresses when it calls this, so Client ID Documents can't be used to
+  // reach the local network.
+  fetch: globalThis.fetch,
   issuer: config.issuer,
   keys: keys.value,
+  upstreamIssuer: config.upstream.issuer,
 });
 const upstream = createUpstreamClient({
   clientId: config.upstream.clientId,

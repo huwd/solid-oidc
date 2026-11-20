@@ -59,3 +59,4 @@ Editorial improvements, such as clearer wording, typo corrections and link fixes
 | [0005](0005-sqlite-for-provider-state.md) | Store provider state in SQLite through node:sqlite | Accepted |
 | [0006](0006-container-image-on-ghcr.md) | Publish a distroless amd64 image to GitHub Container Registry from version tags | Accepted |
 | [0007](0007-development-secrets.md) | Keep development secrets in SOPS files and inject them with with-secrets | Accepted |
+| [0008](0008-solid-oidc-through-oidc-provider-features.md) | Meet Solid-OIDC through oidc-provider's own features | Proposed |

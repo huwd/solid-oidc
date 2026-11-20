@@ -32,7 +32,14 @@ export function createTestBrokerApp(issuer: string): Koa {
     issuer,
     log: () => undefined,
     pendingLogins: createPendingLogins({ entriesMax: 10, now: Date.now, ttlMs: 60_000 }),
-    provider: createProvider({ accounts, clients: [], issuer, keys }),
+    provider: createProvider({
+      accounts,
+      clients: [],
+      fetch: () => Promise.reject(new Error("no network in tests")),
+      issuer,
+      keys,
+      upstreamIssuer: "https://auth.example.test",
+    }),
     upstream: unreachableUpstream,
   });
 }
