@@ -49,6 +49,7 @@ Helpers shared between test files live in `src/test-support/`. The test script l
 | Helper | Use it to |
 | ------ | --------- |
 | `login-harness.ts` | Start the broker, the stand-in upstream and a browser together, start an app's login, exchange a code with DPoP, and restart the broker |
+| `tokens.ts` | Decode a token, list the broker's published keys, and check a signature as a Solid server does |
 | `upstream-provider.ts` | Run an `oidc-provider` instance configured like Pocket ID, which logs in whichever subject the test chooses |
 | `browser.ts` | Follow redirects and keep cookies per origin, post forms, and stop at or rewrite a redirect |
 | `client-documents.ts` | Serve Client ID Documents from memory through a fake `fetch`, and see each request |
