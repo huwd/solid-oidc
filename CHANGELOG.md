@@ -11,6 +11,8 @@ Each change adds its entry under Unreleased when it merges. A release moves thos
 ### Added
 
 - A container image for `linux/amd64`, published to `ghcr.io/huwd/solid-oidc`, that runs as a non-root user and includes a healthcheck.
+- An OpenID discovery document and the public signing keys, under the issuer URL. Endpoint URLs always start with `ISSUER_URL`, whatever host or protocol a request claims.
+- A token-signing key and cookie keys, created in `DATA_DIR/keys.json` on first start and reused afterwards. The image's default `DATA_DIR` is `/data`.
 - A health endpoint at `GET /health`.
 - Configuration through environment variables, validated at startup with every problem reported at once: the broker's issuer, the upstream provider's issuer and client credentials, the accounts file and the data directory.
 - An accounts file in JSON that maps each upstream issuer and subject to the WebID it may log in as. Accounts not listed are refused.

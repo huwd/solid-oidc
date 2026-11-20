@@ -12,7 +12,7 @@ It does not store Pod data or enforce access control. A separate Solid server, s
 
 ## Status
 
-Early development. The service starts, validates its configuration and answers a health check. It does not issue tokens yet.
+Early development. The service validates its configuration and publishes an OpenID discovery document and its public signing keys under the issuer URL. Nobody can log in yet, and it does not issue tokens.
 
 [`docs/decisions/`](docs/decisions/README.md) records the design decisions made so far.
 
@@ -28,7 +28,7 @@ The service reads its configuration from environment variables at startup. It st
 | `UPSTREAM_CLIENT_SECRET` | One of these two | | The client secret for that registration. |
 | `UPSTREAM_CLIENT_SECRET_FILE` | One of these two | | Path to a file holding the client secret, such as a Docker secret. One trailing newline is ignored. |
 | `ACCOUNTS_FILE` | Yes | | Path to the [accounts file](#accounts-file). |
-| `DATA_DIR` | Yes | | Absolute path to a directory for persistent state, such as signing keys. Mount a volume here. |
+| `DATA_DIR` | Yes (the image sets `/data`) | | Absolute path to a directory for persistent state. Mount a volume here. See [Persistent state](#persistent-state). |
 | `HOST` | No | `0.0.0.0` | Interface to listen on. |
 | `PORT` | No | `3000` | Port to listen on. |
 
@@ -58,6 +58,14 @@ The broker matches only the exact issuer and subject. It never uses an email add
 One person can have more than one entry with the same WebID, but the same issuer and subject can only appear once.
 [Decision 0004](docs/decisions/0004-static-user-mapping.md) explains why the mapping is static.
 
+### Persistent state
+
+On first start, the broker creates `keys.json` in `DATA_DIR`, holding its private token-signing key and cookie-signing keys. Later starts reuse it, so tokens and sessions survive a restart.
+
+- The file is created readable only by its owner (mode 600). The broker refuses to start if anyone else can read it.
+- Back it up with the rest of `DATA_DIR`. Losing it invalidates every token the broker has issued.
+- Deleting it makes the broker generate new keys on the next start.
+
 ## Running the image
 
 Images are published to GitHub Container Registry for `linux/amd64`:
@@ -69,14 +77,13 @@ docker run --rm \
   --env UPSTREAM_CLIENT_ID=solid-oidc \
   --env UPSTREAM_CLIENT_SECRET_FILE=/run/secrets/upstream-client-secret \
   --env ACCOUNTS_FILE=/config/accounts.json \
-  --env DATA_DIR=/data \
   --volume "$PWD/config:/config:ro" \
   --volume solid-oidc-data:/data \
   --publish 3000:3000 \
   ghcr.io/huwd/solid-oidc:0.1
 ```
 
-The image runs as a non-root user on a distroless base, and has a built-in healthcheck.
+The image runs as a non-root user on a distroless base, and has a built-in healthcheck. Its `/data` directory belongs to that user, so a named volume mounted there is writable. A bind mount must be writable by user ID 65532.
 
 ## Development
 
