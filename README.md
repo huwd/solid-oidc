@@ -99,7 +99,7 @@ On first start, the broker creates two things in `DATA_DIR`:
 
 | File | Holds |
 | ---- | ----- |
-| `keys.json` | The private token-signing key and the cookie-signing keys |
+| `keys.json` | The private token-signing keys and the cookie-signing keys, with the date each was added |
 | `provider.sqlite`, with `-wal` and `-shm` files beside it | Sessions, grants, authorisation codes, access and refresh tokens |
 
 Later starts reuse both, so people stay logged in and refresh tokens keep working across a restart.

@@ -32,7 +32,7 @@ if (!loaded.ok) {
 }
 const config = loaded.value;
 
-const keys = await loadOrCreateKeys(config.dataDir);
+const keys = await loadOrCreateKeys({ dataDir: config.dataDir, now: Date.now });
 if (!keys.ok) {
   exitWithErrors(keys.errors);
 }
