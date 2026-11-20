@@ -60,4 +60,5 @@ Editorial improvements, such as clearer wording, typo corrections and link fixes
 | [0006](0006-container-image-on-ghcr.md) | Publish a distroless amd64 image to GitHub Container Registry from version tags | Accepted |
 | [0007](0007-development-secrets.md) | Keep development secrets in SOPS files and inject them with with-secrets | Accepted |
 | [0008](0008-solid-oidc-through-oidc-provider-features.md) | Meet Solid-OIDC through oidc-provider's own features | Accepted |
-| [0009](0009-loopback-client-ids-for-development.md) | Allow loopback Client ID Documents only behind a development setting | Proposed |
+| [0009](0009-loopback-client-ids-for-development.md) | Allow loopback Client ID Documents only behind a development setting | Accepted |
+| [0010](0010-test-against-real-implementations.md) | Test against real protocol implementations, not scripted stubs | Accepted |

@@ -1,6 +1,6 @@
 # 0009. Allow loopback Client ID Documents only behind a development setting
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Decided by:** @huwd
 - **Decided:** 2026-11-20
 - **Recorded:** 2026-11-20

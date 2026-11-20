@@ -217,6 +217,7 @@ Node runs the TypeScript sources directly, so there is no build step.
 
 - [`CLAUDE.md`](CLAUDE.md) covers working conventions for people and coding agents.
 - [`docs/code-style.md`](docs/code-style.md) is the TypeScript style guide.
+- [`docs/testing.md`](docs/testing.md) explains how the broker is tested.
 - [`docs/development-secrets.md`](docs/development-secrets.md) explains how to use secrets locally.
 - [`docs/releasing.md`](docs/releasing.md) explains how releases are made.
 

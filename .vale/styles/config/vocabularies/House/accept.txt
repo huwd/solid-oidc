@@ -13,14 +13,17 @@ ESLint
 (?i)globals
 (?i)healthchecks?
 (?i)homelab
+Imposter
 ID's
 JWTs?
 Koa
 (?i)lifecycles?
 (?i)linters?
 (?i)lockfiles?
+Mockoon
 (?i)loopback
 (?i)namespaces?
+(?i)nonces?
 npm
 Nygard('s)?
 OAuth
@@ -31,6 +34,7 @@ pnpm('s)?
 (?i)rulesets?
 Ryzen
 shellcheck
+(?i)stateful
 Synology
 (?i)tmpfs
 (?i)toolchains?
