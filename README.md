@@ -12,7 +12,7 @@ It does not store Pod data or enforce access control. A separate Solid server, s
 
 ## Status
 
-Early development. The broker is a Solid-OIDC issuer: Solid apps can log in with it, and it issues DPoP-bound tokens carrying the person's WebID. It logs people in through the upstream provider. Sessions, grants and cached Client ID Documents are kept in memory, so a restart logs everyone out.
+Early development. The broker is a Solid-OIDC issuer: Solid apps can log in with it, and it issues DPoP-bound tokens carrying the person's WebID. It logs people in through the upstream provider. Sessions, grants and tokens are kept in SQLite in `DATA_DIR`, so they survive a restart.
 
 [`docs/decisions/`](docs/decisions/README.md) records the design decisions made so far.
 
@@ -94,11 +94,44 @@ The object is `ISSUER_URL`, exactly.
 
 ### Persistent state
 
-On first start, the broker creates `keys.json` in `DATA_DIR`, holding its private token-signing key and cookie-signing keys. Later starts reuse it, so tokens and sessions survive a restart.
+On first start, the broker creates two things in `DATA_DIR`:
 
-- The file is created readable only by its owner (mode 600). The broker refuses to start if anyone else can read it.
-- Back it up with the rest of `DATA_DIR`. Losing it invalidates every token the broker has issued.
-- Deleting it makes the broker generate new keys on the next start.
+| File | Holds |
+| ---- | ----- |
+| `keys.json` | The private token-signing key and the cookie-signing keys |
+| `provider.sqlite`, with `-wal` and `-shm` files beside it | Sessions, grants, authorisation codes, access and refresh tokens |
+
+Later starts reuse both, so people stay logged in and refresh tokens keep working across a restart.
+[Decision 0005](docs/decisions/0005-sqlite-for-provider-state.md) explains the choice of SQLite.
+
+- Both are created readable only by their owner (mode 600). The broker refuses to start if anyone else can read them.
+- The database has a schema version. The broker refuses to start against a database with a version it doesn't know, such as one written by a newer release.
+- Expired records are removed every five minutes, up to 1,000 at a time.
+- Deleting `keys.json` makes the broker generate new keys on the next start, which invalidates every token it has issued.
+- Client ID Documents are cached in memory only, so the broker fetches them again after a restart.
+
+### Backing up and restoring
+
+Back up `keys.json` and the database together: tokens in one backup need the keys from the same backup.
+
+Don't copy `provider.sqlite` while the broker runs, because a copy taken during a write can be corrupt. Use the backup command, which takes a consistent copy while the broker keeps running:
+
+```sh
+docker exec solid-oidc /nodejs/bin/node src/bin/backup.ts /data/backups/provider-2026-11-20.sqlite
+docker cp solid-oidc:/data/backups/provider-2026-11-20.sqlite .
+docker cp solid-oidc:/data/keys.json .
+```
+
+The command writes a new file readable only by its owner, and refuses to overwrite one. It creates the directory if needed, readable only by its owner too.
+
+To restore:
+
+1. Stop the broker.
+2. Replace `provider.sqlite` in `DATA_DIR` with the backup, and delete any `provider.sqlite-wal` and `provider.sqlite-shm` files beside it.
+3. Replace `keys.json` with the one from the same backup.
+4. Check both are mode 600 and owned by the broker's user, then start the broker.
+
+Test a restore before relying on your backups.
 
 ## Running the image
 

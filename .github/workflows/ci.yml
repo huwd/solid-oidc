@@ -134,7 +134,7 @@ jobs:
             if docker exec smoke /nodejs/bin/node src/bin/healthcheck.ts; then
               echo "Healthy after ${attempt} attempt(s)"
               docker exec smoke /nodejs/bin/node --eval \
-                "require('node:fs').accessSync('/data/keys.json')"
+                "require('node:fs').accessSync('/data/keys.json'); require('node:fs').accessSync('/data/provider.sqlite')"
               exit 0
             fi
             sleep 1

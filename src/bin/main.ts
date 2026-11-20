@@ -5,8 +5,10 @@
 
 import { once } from "node:events";
 import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 
 import { createApp, upstreamRedirectUri } from "../app.ts";
+import { databaseFileName, openDatabase, scheduleRemoval } from "../database.ts";
 import { loadOrCreateKeys } from "../keys.ts";
 import { loadConfig } from "../load-config.ts";
 import { createPendingLogins } from "../pending-logins.ts";
@@ -35,8 +37,23 @@ if (!keys.ok) {
   exitWithErrors(keys.errors);
 }
 
+const opened = openDatabase({ now: Date.now, path: join(config.dataDir, databaseFileName) });
+if (!opened.ok) {
+  exitWithErrors(opened.errors);
+}
+using database = opened.value;
+// Every five minutes, up to 1,000 records: far more than a few people's
+// logins create, and small enough to never hold the database for long.
+using _removal = scheduleRemoval({
+  batchSize: 1_000,
+  database,
+  intervalMs: 5 * 60_000,
+  log: (entry) => console.log(JSON.stringify(entry)),
+});
+
 const provider = createProvider({
   accounts: config.accounts,
+  adapter: database.adapter,
   clients: [],
   // oidc-provider adds its own timeout and refuses private and loopback
   // addresses when it calls this, so Client ID Documents can't be used to

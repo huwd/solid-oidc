@@ -1,6 +1,11 @@
 import { once } from "node:events";
 import type Koa from "koa";
-import Provider, { type ClientMetadata, type Configuration, type FindAccount } from "oidc-provider";
+import Provider, {
+  type AdapterFactory,
+  type ClientMetadata,
+  type Configuration,
+  type FindAccount,
+} from "oidc-provider";
 
 import type { AccountStore } from "./accounts.ts";
 import type { ProviderKeys } from "./keys.ts";
@@ -9,6 +14,8 @@ import { type SolidConfigurationOptions, solidConfiguration } from "./solid.ts";
 
 export type CreateProviderOptions = SolidConfigurationOptions & {
   readonly accounts: AccountStore;
+  /** Where the provider keeps sessions, grants, codes and tokens. */
+  readonly adapter: AdapterFactory;
   /**
    * Clients registered in advance, for tests. Solid apps identify themselves
    * with Client ID Documents instead.
@@ -26,6 +33,7 @@ export function createProvider(options: CreateProviderOptions): Provider {
   const solid = solidConfiguration(options);
   const configuration: Configuration = {
     ...solid,
+    adapter: options.adapter,
     clients: options.clients.map((client) => ({ ...client })),
     cookies: { keys: [...options.keys.cookieKeys] },
     features: {

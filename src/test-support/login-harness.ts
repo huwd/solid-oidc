@@ -3,6 +3,7 @@ import * as client from "openid-client";
 
 import { type Account, createStaticAccountStore } from "../accounts.ts";
 import { createApp, upstreamRedirectUri } from "../app.ts";
+import { openDatabase, type ProviderDatabase } from "../database.ts";
 import type { LogEntry } from "../interactions.ts";
 import { generateProviderKeys } from "../keys.ts";
 import { createPendingLogins } from "../pending-logins.ts";
@@ -39,12 +40,19 @@ export type Harness = AsyncDisposable & {
   readonly browser: Browser;
   readonly issuer: string;
   readonly logs: LogEntry[];
+  /**
+   * Replace the broker with a new one on the same origin, as a restart does:
+   * nothing survives but the database file and the keys.
+   */
+  restartBroker(): void;
   readonly upstream: UpstreamProvider;
 };
 
 export async function startHarness(
   options: {
     readonly accounts?: (upstreamIssuer: string) => readonly Account[];
+    /** A database file to keep across restarts. By default, one in memory. */
+    readonly databasePath?: string;
     /** Serves Client ID Documents. By default, every fetch fails. */
     readonly fetch?: typeof globalThis.fetch;
     /** Point the broker at this upstream issuer instead of the stand-in. */
@@ -59,36 +67,48 @@ export async function startHarness(
   const mapping = options.accounts ?? ((upstreamIssuer) => [alice(upstreamIssuer)]);
   const accounts = createStaticAccountStore(mapping(upstream.issuer));
   const logs: LogEntry[] = [];
-  const app = createApp({
-    accounts,
-    issuer,
-    log: (entry) => logs.push(entry),
-    pendingLogins: createPendingLogins({ entriesMax: 100, now: Date.now, ttlMs: 60_000 }),
-    provider: createProvider({
+  let database: ProviderDatabase | undefined;
+
+  function startBroker(): void {
+    database?.[Symbol.dispose]();
+    const opened = openDatabase({ now: Date.now, path: options.databasePath ?? ":memory:" });
+    assert.ok(opened.ok, `expected the database to open: ${JSON.stringify(opened)}`);
+    database = opened.value;
+    const app = createApp({
       accounts,
-      clients: [testApp, unnamedApp],
-      fetch: options.fetch ?? refuseFetch,
       issuer,
-      keys,
-      upstreamIssuer: upstream.issuer,
-    }),
-    upstream: createUpstreamClient({
-      clientId: upstream.clientId,
-      clientSecret: upstream.clientSecret,
-      issuer: options.upstreamIssuer ?? upstream.issuer,
-      redirectUri: upstreamRedirectUri(issuer),
-    }),
-  });
-  brokerServer.serve(app.callback());
+      log: (entry) => logs.push(entry),
+      pendingLogins: createPendingLogins({ entriesMax: 100, now: Date.now, ttlMs: 60_000 }),
+      provider: createProvider({
+        accounts,
+        adapter: database.adapter,
+        clients: [testApp, unnamedApp],
+        fetch: options.fetch ?? refuseFetch,
+        issuer,
+        keys,
+        upstreamIssuer: upstream.issuer,
+      }),
+      upstream: createUpstreamClient({
+        clientId: upstream.clientId,
+        clientSecret: upstream.clientSecret,
+        issuer: options.upstreamIssuer ?? upstream.issuer,
+        redirectUri: upstreamRedirectUri(issuer),
+      }),
+    });
+    brokerServer.serve(app.callback());
+  }
+  startBroker();
 
   return {
     browser: createBrowser(),
     issuer,
     logs,
+    restartBroker: startBroker,
     upstream,
     async [Symbol.asyncDispose]() {
       await upstream[Symbol.asyncDispose]();
       await brokerServer[Symbol.asyncDispose]();
+      database?.[Symbol.dispose]();
     },
   };
 }
