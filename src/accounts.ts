@@ -19,6 +19,11 @@ export type AccountStore = {
    * if the account may not log in. Never match on any other claim.
    */
   findWebId(identity: UpstreamIdentity): Promise<string | undefined>;
+  /**
+   * Whether some account maps to this WebID. The provider checks it whenever
+   * it loads an account, so removing a mapping ends that person's access.
+   */
+  hasWebId(webId: string): Promise<boolean>;
 };
 
 export type Account = {
@@ -92,8 +97,10 @@ export function parseAccounts(options: ParseAccountsOptions): Result<readonly Ac
 /** An account store backed by a fixed list, such as the accounts file. */
 export function createStaticAccountStore(accounts: readonly Account[]): AccountStore {
   const webIds = indexAccounts(accounts);
+  const known = new Set(accounts.map((account) => account.webId));
   return {
     findWebId: (identity) => Promise.resolve(webIds.get(identity.issuer)?.get(identity.subject)),
+    hasWebId: (webId) => Promise.resolve(known.has(webId)),
   };
 }
 

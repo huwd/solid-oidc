@@ -1,30 +1,37 @@
 import { once } from "node:events";
 import type Koa from "koa";
-import Provider, { type Configuration } from "oidc-provider";
+import Provider, { type ClientMetadata, type Configuration, type FindAccount } from "oidc-provider";
 
+import type { AccountStore } from "./accounts.ts";
 import type { ProviderKeys } from "./keys.ts";
 
 export type CreateProviderOptions = {
+  readonly accounts: AccountStore;
+  /** Clients registered in advance. Solid apps will use Client ID Documents. */
+  readonly clients: readonly ClientMetadata[];
   /** The broker's issuer identifier, exactly as configured. */
   readonly issuer: string;
   readonly keys: ProviderKeys;
 };
 
 /**
- * Create the Solid-facing OpenID provider. Logging in is not available yet:
- * no account can be found, and the interaction route is a placeholder.
+ * Create the Solid-facing OpenID provider. Its accounts are WebIDs, and the
+ * broker's interaction routes log people in through the upstream provider.
  */
 export function createProvider(options: CreateProviderOptions): Provider {
   const prefix = issuerPath(options.issuer);
   const configuration: Configuration = {
-    clients: [],
+    // The broker's only signing key is ES256, and oidc-provider would
+    // otherwise expect an RSA key for any client that doesn't name one.
+    clientDefaults: { id_token_signed_response_alg: "ES256" },
+    clients: options.clients.map((client) => ({ ...client })),
     cookies: { keys: [...options.keys.cookieKeys] },
     features: {
       // The development views accept any username and password. They must
       // never be reachable, even before the real login exists.
       devInteractions: { enabled: false },
     },
-    findAccount: findNoAccount,
+    findAccount: accountFinder(options.accounts),
     interactions: { url: interactionUrlFor(prefix) },
     jwks: { keys: options.keys.signingKeys.map((key) => ({ ...key })) },
   };
@@ -54,33 +61,54 @@ export function interactionUrlFor(
   return (_context, interaction) => interactionUrl({ prefix, uid: interaction.uid });
 }
 
-/** No account can log in until the upstream login exists. */
-export function findNoAccount(): undefined {
-  return undefined;
+/**
+ * The provider's `findAccount` setting. An account is a WebID, and loads only
+ * while the account store still maps some upstream account to it, so removing
+ * a mapping ends that person's sessions too.
+ */
+export function accountFinder(accounts: AccountStore): FindAccount {
+  return async (_context, webId) => {
+    if (!(await accounts.hasWebId(webId))) {
+      return undefined;
+    }
+    return { accountId: webId, claims: () => ({ sub: webId }) };
+  };
 }
 
 /**
- * Koa middleware that hands requests under the issuer's path to the provider.
+ * Koa middleware that keeps the rest of the chain to requests under the
+ * issuer's path, and answers anything else with 404.
  *
- * Endpoint URLs in discovery and tokens are built from the request's host and
- * protocol. Behind a proxy those differ from the public URL, and a client
- * could set them to anything, so they are replaced with the issuer's before
- * the provider sees the request.
+ * The provider builds endpoint URLs and cookie settings from the request's
+ * host and protocol. Behind a proxy those differ from the public URL, and a
+ * client could set them to anything, so they are replaced with the issuer's
+ * before the interaction routes or the provider see the request.
  */
+export function scopeToIssuer(issuer: string): Koa.Middleware {
+  const issuerUrl = new URL(issuer);
+  const prefix = issuerPath(issuer);
+
+  return async (context, next) => {
+    if (!isUnder({ path: context.path, prefix })) {
+      return;
+    }
+    const { headers } = context.req;
+    headers.host = issuerUrl.host;
+    headers["x-forwarded-proto"] = issuerUrl.protocol.slice(0, -1);
+    delete headers["x-forwarded-host"];
+    await next();
+  };
+}
+
+/** Koa middleware that hands every request that reaches it to the provider. */
 export function mountProvider(options: {
   readonly issuer: string;
   readonly provider: Provider;
 }): Koa.Middleware {
-  const issuerUrl = new URL(options.issuer);
   const prefix = issuerPath(options.issuer);
   const handle = options.provider.callback();
 
-  return async (context, next) => {
-    if (!isUnder({ path: context.path, prefix })) {
-      await next();
-      return;
-    }
-
+  return async (context) => {
     const request = context.req;
     const { originalUrl } = context;
     // oidc-provider works out its mount path from originalUrl.
@@ -89,9 +117,6 @@ export function mountProvider(options: {
     // the provider needs a path that starts with a slash either way.
     const rest = originalUrl.slice(prefix.length);
     request.url = rest.startsWith("/") ? rest : `/${rest}`;
-    request.headers.host = issuerUrl.host;
-    request.headers["x-forwarded-proto"] = issuerUrl.protocol.slice(0, -1);
-    delete request.headers["x-forwarded-host"];
 
     context.respond = false;
     const closed = once(context.res, "close");

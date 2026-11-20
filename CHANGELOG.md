@@ -11,6 +11,7 @@ Each change adds its entry under Unreleased when it merges. A release moves thos
 ### Added
 
 - A container image for `linux/amd64`, published to `ghcr.io/huwd/solid-oidc`, that runs as a non-root user and includes a healthcheck.
+- Login through the upstream provider, using PKCE, `state` and `nonce`. The broker maps the upstream account to a WebID by exact issuer and subject, and asks the person to confirm each app. Register `<ISSUER_URL>/upstream/callback` as the callback URL at the upstream provider.
 - An OpenID discovery document and the public signing keys, under the issuer URL. Endpoint URLs always start with `ISSUER_URL`, whatever host or protocol a request claims.
 - A token-signing key and cookie keys, created in `DATA_DIR/keys.json` on first start and reused afterwards. The image's default `DATA_DIR` is `/data`.
 - A health endpoint at `GET /health`.

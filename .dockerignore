@@ -5,3 +5,4 @@
 !pnpm-workspace.yaml
 !src/
 src/**/*.test.ts
+src/test-support/
