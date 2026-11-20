@@ -15,6 +15,7 @@ Run everything inside `devenv shell`, or prefix a command with `devenv shell --`
 | `pnpm run docs:prose` | Vale prose and British spelling check: advisory, local only |
 | `pnpm run dev` | Run with reload, after setting the variables in the Configuration section of the README |
 | `docker build --tag solid-oidc:dev .` | Build the image |
+| `docker compose --file sandbox/compose.yaml up --build` | Run the full login journey against stubs, at <http://localhost:5000> |
 
 Node runs `.ts` files directly by stripping types, with no build step, so import local files with their `.ts` extension.
 

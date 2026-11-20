@@ -31,6 +31,7 @@ The service reads its configuration from environment variables at startup. It st
 | `DATA_DIR` | Yes (the image sets `/data`) | | Absolute path to a directory for persistent state. Mount a volume here. See [Persistent state](#persistent-state). |
 | `HOST` | No | `0.0.0.0` | Interface to listen on. |
 | `PORT` | No | `3000` | Port to listen on. |
+| `DEVELOPMENT_ALLOW_LOOPBACK_CLIENT_IDS` | No | `false` | `true` lets the broker fetch Client ID Documents from `localhost`, `127.0.0.1` or `[::1]`, for the [sandbox](#sandbox). Never set it in production. [Decision 0009](docs/decisions/0009-loopback-client-ids-for-development.md) explains why. |
 
 The issuer appears in tokens and in each user's WebID profile as `solid:oidcIssuer`, so choose it once and keep it.
 
@@ -151,6 +152,53 @@ docker run --rm \
 ```
 
 The image runs as a non-root user on a distroless base, and has a built-in healthcheck. Its `/data` directory belongs to that user, so a named volume mounted there is writable. A bind mount must be writable by user ID 65532.
+
+## Sandbox
+
+The sandbox runs the whole login journey on your machine, in Docker, against stubs. It needs no Pocket ID, Solid server, accounts or secrets.
+
+```sh
+docker compose --file sandbox/compose.yaml up --build
+```
+
+Then open <http://localhost:5000> and choose **Log in with the broker**. You:
+
+1. go to the stub upstream provider, which stands in for Pocket ID, and choose who to log in as
+2. come back to the broker, which asks you to allow the app to use your WebID
+3. land on the stub app, which shows the decoded access and ID tokens, and can refresh them
+
+Log in as the stranger to see the page the broker shows when no WebID matches.
+
+| Address | Service |
+| ------- | ------- |
+| <http://localhost:3000> | The broker, built from this repository |
+| <http://localhost:4000> | The stub upstream provider |
+| <http://localhost:5000> | The stub Solid app, and Alice's WebID profile at `/profile/card` |
+| <https://localhost:5443/clientid.jsonld> | The app's Client ID Document |
+
+### Changing the sandbox
+
+Set these in your shell, or in a `.env` file in `sandbox/`, before `docker compose up`:
+
+| Variable | Default | Meaning |
+| -------- | ------- | ------- |
+| `SANDBOX_APP_NAME` | `Sandbox Solid App` | The name in the app's Client ID Document, shown on the consent page |
+| `SANDBOX_APP_SCOPE` | `openid webid offline_access` | The scopes the app asks for. Without `offline_access`, it gets no refresh token. |
+| `SANDBOX_UPSTREAM_SUBJECTS` | Alice and a stranger | The subjects the stub upstream offers, as `label=subject` pairs separated by `;` |
+| `SANDBOX_UPSTREAM_CLIENT_SECRET` | `sandbox-only-not-a-secret` | The secret the broker and the stub upstream share |
+
+The stub upstream also accepts any subject typed into its page. To give a new subject a WebID, add it to [`sandbox/accounts.json`](sandbox/accounts.json) and restart.
+The broker caches the app's Client ID Document for at least a minute, so a new name or scope can take that long to appear on the consent page.
+
+### How the sandbox is put together
+
+The stubs run in one container, and the broker shares its network, so the browser and every service reach each other at the same `localhost` addresses. Ports are published on `127.0.0.1` only.
+
+Solid-OIDC needs a Client ID Document served over HTTPS. On first start, the stubs container creates a certificate authority and a certificate for `localhost`, in a volume that belongs to the sandbox. The broker trusts that authority through `NODE_EXTRA_CA_CERTS`. Your browser never needs to, because only the broker fetches the document.
+
+The broker runs with `DEVELOPMENT_ALLOW_LOOPBACK_CLIENT_IDS=true`, since the document is on `localhost`, and logs a warning that says so.
+
+`docker compose --file sandbox/compose.yaml down --volumes` removes the sandbox and its data.
 
 ## Development
 

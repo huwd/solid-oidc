@@ -38,7 +38,7 @@ updates:
         update-types: ["minor", "patch"]
 
   - package-ecosystem: docker
-    directory: "/"
+    directories: ["/", "/sandbox"]
     schedule:
       interval: weekly
     cooldown:

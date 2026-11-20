@@ -1,0 +1,65 @@
+# A local sandbox for the full login journey against stubs:
+#
+#   docker compose --file sandbox/compose.yaml up --build
+#
+# then open http://localhost:5000. See the Sandbox section of the README.
+#
+# The broker shares the stubs' network namespace, so every service, and the
+# browser, reaches the others at the same localhost URLs. Ports are published
+# on 127.0.0.1 only.
+
+name: solid-oidc-sandbox
+
+services:
+  stubs:
+    build:
+      context: ..
+      dockerfile: sandbox/stubs.Dockerfile
+    environment:
+      # Passed through only when set in your shell; the stubs have defaults.
+      - SANDBOX_APP_NAME
+      - SANDBOX_APP_SCOPE
+      - SANDBOX_UPSTREAM_SUBJECTS
+      - SANDBOX_UPSTREAM_CLIENT_SECRET=${SANDBOX_UPSTREAM_CLIENT_SECRET:-sandbox-only-not-a-secret}
+    ports:
+      - "127.0.0.1:3000:3000" # broker
+      - "127.0.0.1:4000:4000" # stub upstream provider
+      - "127.0.0.1:5000:5000" # stub Solid app
+      - "127.0.0.1:5443:5443" # the app's Client ID Document, over HTTPS
+    volumes:
+      - certs:/certs
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - --eval
+        - "fetch('http://localhost:5000/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  broker:
+    build:
+      context: ..
+    network_mode: service:stubs
+    depends_on:
+      stubs:
+        condition: service_healthy
+    environment:
+      ACCOUNTS_FILE: /sandbox/accounts.json
+      # The stub app's Client ID Document is on localhost. Never set this
+      # outside a sandbox: see docs/decisions/0009.
+      DEVELOPMENT_ALLOW_LOOPBACK_CLIENT_IDS: "true"
+      ISSUER_URL: http://localhost:3000
+      NODE_EXTRA_CA_CERTS: /certs/ca.pem
+      UPSTREAM_CLIENT_ID: solid-oidc-broker
+      UPSTREAM_CLIENT_SECRET: ${SANDBOX_UPSTREAM_CLIENT_SECRET:-sandbox-only-not-a-secret}
+      UPSTREAM_ISSUER_URL: http://localhost:4000
+    volumes:
+      - ./accounts.json:/sandbox/accounts.json:ro
+      - certs:/certs:ro
+      - broker-data:/data
+
+volumes:
+  certs:
+  broker-data:

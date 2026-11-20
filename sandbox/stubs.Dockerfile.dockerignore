@@ -1,0 +1,6 @@
+# Only package metadata and the sandbox's sources go into the stubs image.
+*
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!sandbox/
