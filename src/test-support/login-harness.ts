@@ -82,6 +82,7 @@ export async function startHarness(
       provider: createProvider({
         accounts,
         adapter: database.adapter,
+        allowLoopbackClientIds: false,
         clients: [testApp, unnamedApp],
         fetch: options.fetch ?? refuseFetch,
         issuer,

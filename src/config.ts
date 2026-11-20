@@ -16,6 +16,11 @@ export type EnvironmentSettings = {
   readonly accountsFile: string;
   /** Absolute path of the directory for persistent state. */
   readonly dataDir: string;
+  /**
+   * Fetch Client ID Documents from loopback addresses, which production
+   * refuses. For the local sandbox only. See decision 0009.
+   */
+  readonly developmentAllowLoopbackClientIds: boolean;
   /** Interface the HTTP server binds to. */
   readonly host: string;
   /**
@@ -51,6 +56,8 @@ const UpstreamIssuer = z.url().superRefine((value, context) => {
 const EnvironmentSchema = z.object({
   ACCOUNTS_FILE: z.string().min(1),
   DATA_DIR: z.string().refine(isAbsolute, { message: "must be an absolute path" }),
+  // Only the exact words, so a typo can't turn it on.
+  DEVELOPMENT_ALLOW_LOOPBACK_CLIENT_IDS: z.enum(["true", "false"]).default("false"),
   HOST: z.string().min(1).default("0.0.0.0"),
   ISSUER_URL: BrokerIssuer,
   PORT: z.coerce.number().int().min(0).max(portMax).default(3000),
@@ -80,6 +87,7 @@ export function parseEnvironment(environment: Environment): Result<EnvironmentSe
   const settings: EnvironmentSettings = {
     accountsFile: variables.ACCOUNTS_FILE,
     dataDir: variables.DATA_DIR,
+    developmentAllowLoopbackClientIds: variables.DEVELOPMENT_ALLOW_LOOPBACK_CLIENT_IDS === "true",
     host: variables.HOST,
     issuer: variables.ISSUER_URL,
     port: variables.PORT,

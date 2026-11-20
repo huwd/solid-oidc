@@ -26,6 +26,12 @@ const clientDocumentCacheSeconds = { max: 3_600, min: 60 } as const;
 
 export type SolidConfigurationOptions = {
   /**
+   * Fetch Client ID Documents from loopback addresses. Never set this in
+   * production: it lets an app's `client_id` reach services on the broker's
+   * own host. See decision 0009.
+   */
+  readonly allowLoopbackClientIds: boolean;
+  /**
    * Fetches Client ID Documents. oidc-provider adds a timeout and, in
    * production, a connection policy that refuses private and loopback
    * addresses, so pass `globalThis.fetch` there. Tests pass a fake.
@@ -92,21 +98,43 @@ export function solidConfiguration(options: SolidConfigurationOptions) {
         useGrantedResource: () => true,
       },
     },
-    fetch: clientDocumentFetch(options.fetch),
+    fetch: clientDocumentFetch({
+      allowLoopback: options.allowLoopbackClientIds,
+      fetch: options.fetch,
+    }),
     fetchResponseBodyLimits: { "client_id metadata document": clientDocumentBytesMax },
     scopes: ["openid", "offline_access", "webid"],
   } satisfies Configuration;
 }
 
 /**
- * Ask for JSON-LD as well as JSON. Solid apps often publish their Client ID
- * Document as JSON-LD, which is JSON with an `@context`, and a server that
+ * The fetch oidc-provider calls for Client ID Documents.
+ *
+ * It asks for JSON-LD as well as JSON. Solid apps often publish their Client
+ * ID Document as JSON-LD, which is JSON with an `@context`, and a server that
  * negotiates content may refuse a request for plain JSON alone.
+ *
+ * oidc-provider passes an undici `dispatcher` that refuses private and
+ * loopback addresses. With `allowLoopback`, and only for a URL whose host is
+ * a loopback name or address, the dispatcher is dropped. Every other URL
+ * keeps the protection.
  */
-export function clientDocumentFetch(fetch: typeof globalThis.fetch): typeof globalThis.fetch {
+export function clientDocumentFetch(options: {
+  readonly allowLoopback: boolean;
+  readonly fetch: typeof globalThis.fetch;
+}): typeof globalThis.fetch {
   return (input, init) => {
     const headers = new Headers(init?.headers);
     headers.set("accept", "application/ld+json, application/json;q=0.9");
-    return fetch(input, { ...init, headers });
+    const { dispatcher, ...rest } = (init ?? {}) as RequestInit & { readonly dispatcher?: unknown };
+    const keepsProtection = !(options.allowLoopback && isLoopbackUrl(input));
+    return options.fetch(input, { ...rest, ...(keepsProtection ? { dispatcher } : {}), headers });
   };
+}
+
+const loopbackHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+function isLoopbackUrl(input: string | URL | Request): boolean {
+  const url = input instanceof Request ? input.url : input;
+  return loopbackHosts.has(new URL(url).hostname);
 }

@@ -281,6 +281,7 @@ describe("Client ID Documents", () => {
 
 describe("solidConfiguration", () => {
   const configuration = solidConfiguration({
+    allowLoopbackClientIds: false,
     fetch: globalThis.fetch,
     issuer: "https://id.example.test",
     upstreamIssuer: "https://auth.example.test",
@@ -315,10 +316,83 @@ describe("clientDocumentFetch", () => {
     documents.serve(clientId, () => jsonLd({}));
     const signal = AbortSignal.timeout(1_000);
 
-    await clientDocumentFetch(documents.fetch)(clientId, { headers: { "user-agent": "" }, signal });
+    await clientDocumentFetch({ allowLoopback: false, fetch: documents.fetch })(clientId, {
+      headers: { "user-agent": "" },
+      signal,
+    });
 
     const [request] = documents.requests;
     assert.equal(request?.headers.get("user-agent"), "");
     assert.match(request?.headers.get("accept") ?? "", /application\/ld\+json/);
+  });
+
+  // oidc-provider's protection against private addresses is its dispatcher.
+  // A Request can't carry one, so these record the options themselves.
+  const dispatcher = { refuses: "private and loopback addresses" };
+
+  async function dispatcherPassedFor(options: {
+    readonly allowLoopback: boolean;
+    readonly input: string | Request;
+  }): Promise<unknown> {
+    let passed: unknown = "not called";
+    const recording: typeof globalThis.fetch = (_input, init) => {
+      passed = (init as { readonly dispatcher?: unknown } | undefined)?.dispatcher;
+      return Promise.resolve(new Response("{}"));
+    };
+    const init = { dispatcher } as unknown as RequestInit;
+    await clientDocumentFetch({ allowLoopback: options.allowLoopback, fetch: recording })(
+      options.input,
+      init,
+    );
+    return passed;
+  }
+
+  it("keeps the protection for loopback when the development setting is off", async () => {
+    const passed = await dispatcherPassedFor({
+      allowLoopback: false,
+      input: "https://localhost:5443/id",
+    });
+
+    assert.equal(passed, dispatcher);
+  });
+
+  it("drops the protection only for loopback hosts when the development setting is on", async () => {
+    const results = await Promise.all(
+      ["https://localhost:5443/id", "https://127.0.0.1/id", "https://[::1]/id"].map((input) =>
+        dispatcherPassedFor({ allowLoopback: true, input }),
+      ),
+    );
+
+    assert.deepEqual(results, [undefined, undefined, undefined]);
+  });
+
+  it("keeps the protection for every other host when the development setting is on", async () => {
+    const results = await Promise.all(
+      [
+        "https://10.0.0.5/id",
+        "https://app.example.test/id",
+        "https://localhost.example.test/id",
+      ].map((input) => dispatcherPassedFor({ allowLoopback: true, input })),
+    );
+
+    assert.deepEqual(results, [dispatcher, dispatcher, dispatcher]);
+  });
+
+  it("asks for JSON-LD when called with no options", async () => {
+    const documents = createClientDocuments();
+    documents.serve(clientId, () => jsonLd({}));
+
+    await clientDocumentFetch({ allowLoopback: false, fetch: documents.fetch })(clientId);
+
+    assert.match(documents.requests[0]?.headers.get("accept") ?? "", /application\/ld\+json/);
+  });
+
+  it("reads the host from a Request as well as a URL", async () => {
+    const passed = await dispatcherPassedFor({
+      allowLoopback: true,
+      input: new Request("https://localhost:5443/id"),
+    });
+
+    assert.equal(passed, undefined);
   });
 });

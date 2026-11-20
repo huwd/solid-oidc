@@ -30,6 +30,7 @@ describe("parseEnvironment", () => {
     assert.deepEqual(result.value, {
       accountsFile: "/config/accounts.json",
       dataDir: "/data",
+      developmentAllowLoopbackClientIds: false,
       host: "0.0.0.0",
       issuer: "https://id.example.test",
       port: 3000,
@@ -39,6 +40,21 @@ describe("parseEnvironment", () => {
         issuer: "https://auth.example.test",
       },
     });
+  });
+
+  it("turns on loopback Client ID Documents only for the exact word true", () => {
+    const on = parseEnvironment(environmentWith({ DEVELOPMENT_ALLOW_LOOPBACK_CLIENT_IDS: "true" }));
+    const off = parseEnvironment(
+      environmentWith({ DEVELOPMENT_ALLOW_LOOPBACK_CLIENT_IDS: "false" }),
+    );
+
+    assert.ok(on.ok && off.ok, "expected both values to be accepted");
+    assert.equal(on.value.developmentAllowLoopbackClientIds, true);
+    assert.equal(off.value.developmentAllowLoopbackClientIds, false);
+    assert.match(
+      errorsFor(environmentWith({ DEVELOPMENT_ALLOW_LOOPBACK_CLIENT_IDS: "yes" }))[0] ?? "",
+      /^DEVELOPMENT_ALLOW_LOOPBACK_CLIENT_IDS: /,
+    );
   });
 
   it("reads HOST and PORT", () => {
