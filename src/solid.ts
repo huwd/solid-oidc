@@ -1,5 +1,7 @@
 import { type Configuration, errors, type KoaContextWithOIDC } from "oidc-provider";
 
+import { tokenLifetimeSeconds } from "./lifetimes.ts";
+
 /**
  * The parts of the provider's configuration that make it a Solid-OIDC
  * issuer, rather than an ordinary OpenID provider. See
@@ -90,6 +92,7 @@ export function solidConfiguration(options: SolidConfigurationOptions) {
           }
           return {
             accessTokenFormat: "jwt",
+            accessTokenTTL: tokenLifetimeSeconds,
             audience: solidAudience,
             jwt: { sign: { alg: "ES256" } },
             scope: "webid",
