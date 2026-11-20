@@ -12,7 +12,7 @@ It does not store Pod data or enforce access control. A separate Solid server, s
 
 ## Status
 
-Early development. The broker publishes an OpenID discovery document and its public signing keys, logs people in through the upstream provider and maps them to a WebID. It issues ordinary OpenID Connect tokens, not Solid-OIDC ones yet. It has no way to register Solid apps yet, so in practice nobody can log in to one.
+Early development. The broker is a Solid-OIDC issuer: Solid apps can log in with it, and it issues DPoP-bound tokens carrying the person's WebID. It logs people in through the upstream provider. Sessions, grants and cached Client ID Documents are kept in memory, so a restart logs everyone out.
 
 [`docs/decisions/`](docs/decisions/README.md) records the design decisions made so far.
 
@@ -48,10 +48,13 @@ In Pocket ID, create an OIDC client that is not public, and give it that callbac
 
 ### How a login works
 
-1. A Solid app sends the person to the broker.
+1. A Solid app sends the person to the broker. The app's `client_id` is the URL of its Client ID Document, which the broker fetches to learn the app's name and redirect URIs.
 2. The broker sends them on to the upstream provider to log in.
 3. The broker checks the upstream ID token and finds the WebID for its exact issuer and subject in the [accounts file](#accounts-file).
 4. The broker asks the person to confirm the app may use that WebID. It names the app and shows its client ID, since an app chooses its own name.
+
+The app then gets a DPoP-bound access token, a JWT with `solid` in its audience and the person's WebID as `webid`, which Solid servers accept.
+[Decision 0008](docs/decisions/0008-solid-oidc-through-oidc-provider-features.md) explains how the broker meets Solid-OIDC.
 
 If no WebID matches, the person sees the same page whatever the reason, so the page can't be used to discover who has an account. The broker logs the upstream subject, so an administrator can add it to the accounts file.
 
@@ -78,6 +81,16 @@ The accounts file lists who may log in, and with which WebID. It is JSON:
 The broker matches only the exact issuer and subject. It never uses an email address, username or other claim to choose a WebID, and it refuses anyone not listed.
 One person can have more than one entry with the same WebID, but the same issuer and subject can only appear once.
 [Decision 0004](docs/decisions/0004-static-user-mapping.md) explains why the mapping is static.
+
+### Pointing a WebID at the broker
+
+A Solid server trusts the broker for a WebID only if the WebID profile names it as the issuer:
+
+```turtle
+<#me> <http://www.w3.org/ns/solid/terms#oidcIssuer> <https://id.example.org> .
+```
+
+The object is `ISSUER_URL`, exactly.
 
 ### Persistent state
 
