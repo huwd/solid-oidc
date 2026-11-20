@@ -51,9 +51,20 @@ using _removal = scheduleRemoval({
   log: (entry) => console.log(JSON.stringify(entry)),
 });
 
+if (config.developmentAllowLoopbackClientIds) {
+  console.warn(
+    JSON.stringify({
+      level: "warn",
+      message:
+        "DEVELOPMENT_ALLOW_LOOPBACK_CLIENT_IDS is on: Client ID Documents may be fetched from loopback addresses. Never use this in production.",
+    }),
+  );
+}
+
 const provider = createProvider({
   accounts: config.accounts,
   adapter: database.adapter,
+  allowLoopbackClientIds: config.developmentAllowLoopbackClientIds,
   clients: [],
   // oidc-provider adds its own timeout and refuses private and loopback
   // addresses when it calls this, so Client ID Documents can't be used to

@@ -11,6 +11,8 @@ Each change adds its entry under Unreleased when it merges. A release moves thos
 ### Added
 
 - A container image for `linux/amd64`, published to `ghcr.io/huwd/solid-oidc`, that runs as a non-root user and includes a healthcheck.
+- A local sandbox, started with `docker compose --file sandbox/compose.yaml up --build`, that runs the full login journey against a stub upstream provider and a stub Solid app.
+- `DEVELOPMENT_ALLOW_LOOPBACK_CLIENT_IDS`, which lets the broker fetch Client ID Documents from loopback addresses. It is off by default, for the sandbox only, and logs a warning when on.
 - Sessions, grants, codes and tokens are stored in SQLite in `DATA_DIR/provider.sqlite`, so a restart no longer logs everyone out. The broker refuses a database with an unknown schema version, and removes expired records every five minutes.
 - A backup command, `node src/bin/backup.ts <destination>`, that copies the database consistently while the broker runs.
 - Solid-OIDC support. Solid apps identify themselves with Client ID Documents, including JSON-LD ones. Access tokens are DPoP-bound JWTs with `solid` in the audience and `webid` and `client_id` claims. Discovery advertises `solid_oidc_supported` and the `webid` scope. A token request without a DPoP proof is refused.

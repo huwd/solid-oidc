@@ -10,6 +10,8 @@ export type Browser = {
 };
 
 export type VisitOptions = {
+  /** Form fields to post, URL-encoded. Only the first request carries them. */
+  readonly form?: Readonly<Record<string, string>>;
   readonly method?: "GET" | "POST" | undefined;
   /** Change a redirect before following it, to test tampered requests. */
   readonly rewrite?: (location: URL) => URL;
@@ -57,8 +59,11 @@ export function createBrowser(): Browser {
     async visit(start, options = {}) {
       let url = new URL(start);
       let method = options.method ?? "GET";
+      let body: URLSearchParams | null =
+        options.form === undefined ? null : new URLSearchParams(options.form);
       for (let redirect = 0; redirect < redirectsMax; redirect += 1) {
         const response = await fetch(url, {
+          body,
           headers: { cookie: cookieHeader(url) },
           method,
           redirect: "manual",
@@ -75,6 +80,7 @@ export function createBrowser(): Browser {
         }
         url = next;
         method = "GET";
+        body = null;
       }
       throw new Error(`More than ${redirectsMax} redirects from ${start}`);
     },

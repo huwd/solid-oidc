@@ -1,0 +1,9 @@
+{
+  "accounts": [
+    {
+      "upstreamIssuer": "http://localhost:4000",
+      "upstreamSubject": "8c1f6d2e-0000-4000-8000-a11ce0000000",
+      "webId": "http://localhost:5000/profile/card#me"
+    }
+  ]
+}

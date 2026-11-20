@@ -36,6 +36,7 @@ export function createTestBrokerApp(issuer: string): Koa {
     provider: createProvider({
       accounts,
       adapter: inMemoryDatabase().adapter,
+      allowLoopbackClientIds: false,
       clients: [],
       fetch: () => Promise.reject(new Error("no network in tests")),
       issuer,

@@ -6,6 +6,7 @@ import { errorCode, type Result } from "./validation.ts";
 export type Config = {
   readonly accounts: AccountStore;
   readonly dataDir: string;
+  readonly developmentAllowLoopbackClientIds: boolean;
   readonly host: string;
   readonly issuer: string;
   readonly port: number;
@@ -55,6 +56,7 @@ export async function loadConfig(options: LoadConfigOptions): Promise<Result<Con
   const config: Config = {
     accounts: accounts.value,
     dataDir: settings.dataDir,
+    developmentAllowLoopbackClientIds: settings.developmentAllowLoopbackClientIds,
     host: settings.host,
     issuer: settings.issuer,
     port: settings.port,
