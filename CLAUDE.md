@@ -22,7 +22,7 @@ Node runs `.ts` files directly by stripping types, with no build step, so import
 ## Conventions
 
 - Follow [`docs/code-style.md`](docs/code-style.md) for TypeScript. Call out any deviation and its reason.
-- Keep 100% test coverage. Use `node:test`, not Vitest or Jest.
+- Keep 100% test coverage. Use `node:test`, not Vitest or Jest. Follow [`docs/testing.md`](docs/testing.md) for where a test belongs and which helpers to use.
 - Write documentation in plain British English in the GOV.UK style, and run `pnpm run docs:prose` on changed Markdown. Fix its errors; judge its warnings. Add genuine project terms to `.vale/styles/config/vocabularies/House/accept.txt`.
 - Record significant decisions in [`docs/decisions/`](docs/decisions/README.md).
 - Add a user-facing change to `## [Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md) in the same commit. [`docs/releasing.md`](docs/releasing.md) covers releases.

@@ -65,6 +65,8 @@ Read the upstream guide for the rationale and examples. The checklist below summ
 
 ### Tests
 
+[`testing.md`](testing.md) describes the test layers, the shared helpers and when to use a stub.
+
 - Use `node:test` and `node:assert/strict`. Put tests next to the code as `*.test.ts`.
 - Test valid and invalid input, and every failure path.
 - Never monkey-patch modules or globals. Inject dependencies instead.
