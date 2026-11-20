@@ -11,7 +11,7 @@ Each change adds its entry under Unreleased when it merges. A release moves thos
 ### Added
 
 - A container image for `linux/amd64`, published to `ghcr.io/huwd/solid-oidc`, that runs as a non-root user and includes a healthcheck.
-- Key rotation, with `node src/bin/keys.ts`: `rotate`, `promote` and `retire` replace the signing and cookie keys without logging anyone out. `list` shows each key and what it does. The "Rotating keys" section of the README gives the procedure.
+- Key rotation, with `node src/bin/keys.ts`: `rotate`, `promote` and `retire` replace the signing and cookie keys without logging anyone out, and `revoke --confirm` replaces every key and deletes every session and token if the keys may have leaked. `list` shows each key and what it does. The "Rotating keys" section of the README gives the procedure.
 - The broker's startup log names the key that signs tokens and every key it publishes.
 - A local sandbox, started with `docker compose --file sandbox/compose.yaml up --build`, that runs the full login journey against a stub upstream provider and a stub Solid app.
 - `DEVELOPMENT_ALLOW_LOOPBACK_CLIENT_IDS`, which lets the broker fetch Client ID Documents from loopback addresses. It is off by default, for the sandbox only, and logs a warning when on.

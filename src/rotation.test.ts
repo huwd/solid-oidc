@@ -80,6 +80,39 @@ describe("rotating keys", () => {
     // verifies. Reaching the app shows the session was found.
     assert.ok(await logInAgain(harness));
   });
+
+  it("logs everyone out and invalidates every token when keys are revoked", async () => {
+    const dataDir = join(root, "revoked");
+    const keys = new KeyDirectory(dataDir);
+    await using harness = await startHarness({
+      databasePath: join(dataDir, databaseFileName),
+      keys: await keys.load(),
+    });
+    const { keyPair, tokens } = await logInWithConsent(harness);
+    const [leaked] = await kidsPublished(harness);
+
+    await keys.run("revoke", "--confirm");
+    harness.restartBroker({ keys: await keys.load() });
+
+    const published = await kidsPublished(harness);
+    assert.equal(published.length, 1);
+    assert.ok(!published.includes(leaked ?? ""), "expected the leaked key to be unpublished");
+    assert.equal(await checkSignature(harness.issuer, tokens.access_token), "unpublished key");
+    await assert.rejects(refresh(harness, tokens, keyPair), (error: Error & { code?: string }) => {
+      assert.equal(error.code, "OAUTH_RESPONSE_BODY_ERROR");
+      return true;
+    });
+    // With its session gone, the broker sends the browser to the upstream
+    // provider to log in again.
+    const again = await appLogin(harness);
+    const upstreamOrigin = new URL(harness.upstream.issuer).origin;
+    const stopped = await visitUsingBrokerSession(harness, again.authorizationUrl);
+    assert.equal(
+      stopped.url.origin,
+      upstreamOrigin,
+      `expected a new upstream login, got ${stopped.url.href}`,
+    );
+  });
 });
 
 /** A data directory whose keys change through the key command. */

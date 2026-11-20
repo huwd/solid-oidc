@@ -37,7 +37,7 @@ Test a whole flow through the broker's HTTP interface, with real implementations
 - `login.test.ts` logs in through the stand-in upstream provider and checks every refusal.
 - `solid.test.ts` checks discovery, DPoP, the claims and signature of the access token, and Client ID Documents.
 - `restart.test.ts` restarts the broker and checks sessions and refresh tokens survive.
-- `rotation.test.ts` rotates keys between restarts, and checks which tokens and sessions still work.
+- `rotation.test.ts` rotates and revokes keys between restarts, and checks which tokens and sessions still work.
 
 ### Compatibility tests
 

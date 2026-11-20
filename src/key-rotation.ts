@@ -4,6 +4,7 @@ import {
   type KeyFile,
   keysMax,
   newCookieKey,
+  newKeyFile,
   type SigningKeyEntry,
 } from "./keys.ts";
 import { sessionLifetimeSeconds, tokenLifetimeSeconds } from "./lifetimes.ts";
@@ -187,6 +188,25 @@ function retireCookieKeys(
     return { changes: [], keys, waiting };
   }
   return { changes: [`Retired ${count(old.length, "cookie key")}.`], keys: [newest], waiting: [] };
+}
+
+/**
+ * Replace every key at once, keeping none, for keys that may have leaked.
+ * Every token and session they signed stops working.
+ */
+export function revoke(file: KeyFile, options: Pick<StepOptions, "now">): StepResult {
+  const replaced = newKeyFile(options.now);
+  return {
+    ok: true,
+    value: {
+      changes: [
+        ...file.signingKeys.map((key) => `Removed signing key ${key.jwk.kid}.`),
+        `Removed ${count(file.cookieKeys.length, "cookie key")}.`,
+        `Signing key ${replaced.signingKeys[0]?.jwk.kid} and a new cookie key are in use from the next start.`,
+      ],
+      file: replaced,
+    },
+  };
 }
 
 /** Describe each key, one line each, for the key command's `list`. */

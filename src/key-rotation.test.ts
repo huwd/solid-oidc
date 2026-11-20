@@ -7,6 +7,7 @@ import {
   promote,
   publishWaitMs,
   retire,
+  revoke,
   rotate,
   signingKeyRetireWaitMs,
 } from "./key-rotation.ts";
@@ -205,6 +206,37 @@ describe("retire", () => {
 
     assert.deepEqual(kids(retired), kids(rotated));
     assert.equal(retired.cookieKeys.length, 1);
+  });
+});
+
+describe("revoke", () => {
+  it("replaces every key, keeping none", () => {
+    const { file } = (() => {
+      const rotated = ok(rotate(newKeyFile(start), { now: start }));
+      return { file: ok(promote(rotated, { now: start, skipWait: true })) };
+    })();
+
+    const step = revoke(file, { now: start + minute });
+    const revoked = ok(step);
+
+    assert.equal(revoked.signingKeys.length, 1);
+    assert.equal(revoked.cookieKeys.length, 1);
+    assert.ok(!kids(file).includes(kids(revoked)[0] ?? ""), "expected a new signing key");
+    assert.ok(!cookies(file).includes(cookies(revoked)[0] ?? ""), "expected a new cookie key");
+    assert.equal(revoked.signingKeys[0]?.promotedAt, "2026-03-01T09:01:00.000Z");
+    assert.ok(step.ok);
+    assert.deepEqual(step.value.changes, [
+      ...kids(file).map((kid) => `Removed signing key ${kid}.`),
+      "Removed 2 cookie keys.",
+      `Signing key ${kids(revoked)[0]} and a new cookie key are in use from the next start.`,
+    ]);
+  });
+
+  it("counts a single cookie key", () => {
+    const step = revoke(newKeyFile(start), { now: start });
+
+    assert.ok(step.ok);
+    assert.ok(step.value.changes.includes("Removed 1 cookie key."));
   });
 });
 

@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
-import { chmod, mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
 
+import { databaseFileName, openDatabase } from "./database.ts";
 import { keyCommandUsage, runKeyCommand } from "./key-command.ts";
 import { publishWaitMs } from "./key-rotation.ts";
 import { loadOrCreateKeys, readKeyFile } from "./keys.ts";
@@ -34,13 +35,22 @@ async function run(dataDir: string, args: string[], now = Date.now()) {
 }
 
 describe("runKeyCommand", () => {
-  for (const args of [[], ["spin"], ["rotate", "--skip-wait"]]) {
+  for (const args of [[], ["spin"], ["rotate", "--skip-wait"], ["revoke", "--skip-wait"]]) {
     it(`shows the usage for ${JSON.stringify(args)}`, async () => {
       const result = await run(join(root, "unused"), args);
 
       assert.deepEqual(result, { code: 2, errors: [keyCommandUsage], out: [] });
     });
   }
+
+  it("refuses to revoke without --confirm", async () => {
+    const dataDir = await dataDirWithKeys();
+
+    const result = await run(dataDir, ["revoke"]);
+
+    assert.equal(result.code, 2);
+    assert.match(result.errors[0] ?? "", /Run it with --confirm/);
+  });
 
   it("reports a missing key file", async () => {
     const result = await run(join(root, "empty"), ["list"]);
@@ -114,5 +124,40 @@ describe("runKeyCommand", () => {
     } finally {
       await chmod(dataDir, 0o700);
     }
+  });
+
+  it("deletes every session and token, then replaces the keys, when revoking", async () => {
+    const dataDir = await dataDirWithKeys();
+    const before = await readKeyFile(dataDir);
+    {
+      const opened = openDatabase({ now: Date.now, path: join(dataDir, databaseFileName) });
+      assert.ok(opened.ok);
+      using database = opened.value;
+      await database.adapter("Session").upsert("session", {}, 1_000);
+    }
+
+    const result = await run(dataDir, ["revoke", "--confirm"]);
+
+    assert.equal(result.code, 0, result.errors.join("\n"));
+    assert.equal(result.out[0], "Deleted 1 sessions, grants, codes and tokens.");
+    const after = await readKeyFile(dataDir);
+    assert.ok(before.ok && after.ok);
+    assert.notEqual(after.value.signingKeys[0]?.jwk.kid, before.value.signingKeys[0]?.jwk.kid);
+  });
+
+  it("keeps the keys when the database cannot be opened while revoking", async () => {
+    const dataDir = await dataDirWithKeys();
+    const before = await readKeyFile(dataDir);
+    const databasePath = join(dataDir, databaseFileName);
+    await writeFile(databasePath, "");
+    await chmod(databasePath, 0o644);
+
+    const result = await run(dataDir, ["revoke", "--confirm"]);
+
+    assert.equal(result.code, 1);
+    assert.deepEqual(result.errors, [
+      `DATA_DIR: ${databasePath} must be readable only by its owner (mode 600)`,
+    ]);
+    assert.deepEqual(await readKeyFile(dataDir), before);
   });
 });

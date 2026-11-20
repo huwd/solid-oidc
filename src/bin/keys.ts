@@ -1,6 +1,6 @@
-// Rotate the provider's keys:
+// Rotate the provider's keys, or replace them all if they may have leaked:
 //
-//   node src/bin/keys.ts <list|rotate|promote|retire> [option]
+//   node src/bin/keys.ts <list|rotate|promote|retire|revoke> [option]
 //
 // It reads DATA_DIR from the environment, as the broker does. Restart the
 // broker after each change. The README's "Rotating keys" section gives the

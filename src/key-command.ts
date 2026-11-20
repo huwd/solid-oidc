@@ -1,5 +1,8 @@
-import { describeKeys, promote, retire, rotate, type StepResult } from "./key-rotation.ts";
-import { readKeyFile, replaceKeyFile } from "./keys.ts";
+import { join } from "node:path";
+
+import { databaseFileName, openDatabase } from "./database.ts";
+import { describeKeys, promote, retire, revoke, rotate, type StepResult } from "./key-rotation.ts";
+import { type KeyFile, readKeyFile, replaceKeyFile } from "./keys.ts";
 
 export const keyCommandUsage = `Usage: node src/bin/keys.ts <command> [option]
 
@@ -9,6 +12,7 @@ Commands, run with DATA_DIR set, each followed by a broker restart:
   rotate                Publish a new signing key, and start a new cookie key.
   promote [--skip-wait] Start signing with the new signing key.
   retire [--skip-wait]  Remove old keys that nothing in use depends on.
+  revoke --confirm      Replace every key and log everyone out, for leaked keys.
 
 --skip-wait removes or uses a key before it is safe to. Tokens or sessions
 that depend on it stop working.`;
@@ -30,6 +34,7 @@ export async function runKeyCommand(options: KeyCommandOptions): Promise<number>
     list: [],
     promote: ["--skip-wait"],
     retire: ["--skip-wait"],
+    revoke: ["--confirm"],
     rotate: [],
   };
   const allowedFlags = command === undefined ? undefined : allowed[command];
@@ -37,6 +42,13 @@ export async function runKeyCommand(options: KeyCommandOptions): Promise<number>
     options.printError(keyCommandUsage);
     return 2;
   }
+  if (command === "revoke" && !flags.includes("--confirm")) {
+    options.printError(
+      "revoke logs everyone out and invalidates every token. Run it with --confirm if the keys may have leaked.",
+    );
+    return 2;
+  }
+
   const read = await readKeyFile(options.dataDir);
   if (!read.ok) {
     return fail(options, read.errors);
@@ -54,9 +66,32 @@ export async function runKeyCommand(options: KeyCommandOptions): Promise<number>
       return write(options, rotate(file, { now }));
     case "promote":
       return write(options, promote(file, { now, skipWait }));
-    default:
+    case "retire":
       return write(options, retire(file, { now, skipWait }));
+    default:
+      return revokeEverything(options, file, now);
   }
+}
+
+// Delete the stored state before replacing the keys. Whoever copied the key
+// file has probably copied the database beside it, and its refresh tokens
+// would otherwise get new tokens signed with the new key.
+async function revokeEverything(
+  options: KeyCommandOptions,
+  file: KeyFile,
+  now: number,
+): Promise<number> {
+  const opened = openDatabase({ now: options.now, path: join(options.dataDir, databaseFileName) });
+  if (!opened.ok) {
+    return fail(options, opened.errors);
+  }
+  let removed: number;
+  {
+    using database = opened.value;
+    removed = database.removeAll();
+  }
+  options.print(`Deleted ${removed} sessions, grants, codes and tokens.`);
+  return write(options, revoke(file, { now }));
 }
 
 async function write(options: KeyCommandOptions, step: StepResult): Promise<number> {

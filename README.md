@@ -108,7 +108,7 @@ Later starts reuse both, so people stay logged in and refresh tokens keep workin
 - Both are created readable only by their owner (mode 600). The broker refuses to start if anyone else can read them.
 - The database has a schema version. The broker refuses to start against a database with a version it doesn't know, such as one written by a newer release.
 - Expired records are removed every five minutes, up to 1,000 at a time.
-- Don't delete `keys.json` to replace the keys. [Rotate them](#rotating-keys) instead.
+- Don't delete `keys.json` to replace the keys. [Rotate them](#rotating-keys) instead, or revoke them if they may have leaked.
 - Client ID Documents are cached in memory only, so the broker fetches them again after a restart.
 
 ### Backing up and restoring
@@ -157,6 +157,26 @@ A planned rotation takes about 75 minutes and logs nobody out:
 4. After 14 days, `retire` again removes the old cookie key, once every session it signed has expired. Restart the broker.
 
 Each command refuses to run before it is safe to, and says when it can. `--skip-wait` overrides the wait for `promote` and `retire`, but tokens or sessions that depend on an old key stop working.
+
+#### Revoke keys that may have leaked
+
+If `keys.json` or a backup of it may have been copied, run `revoke --confirm`, then restart the broker:
+
+```sh
+docker exec solid-oidc /nodejs/bin/node src/bin/keys.ts revoke --confirm
+docker restart solid-oidc
+```
+
+This:
+
+- replaces every key, keeping none, so tokens signed with the old keys no longer verify
+- deletes every session, grant and token from the database, because whoever copied `keys.json` has probably copied `provider.sqlite` beside it
+
+Everyone has to log in again, and apps have to ask again for permission to use each WebID.
+
+Solid servers cache the broker's published keys. The Community Solid Server keeps them for up to 2 minutes, so it may accept a token signed with a leaked key until then. Restart your Solid servers if you need the old keys refused at once.
+
+Then find out how the file was copied, and check the file permissions in `DATA_DIR`.
 
 ## Running the image
 
