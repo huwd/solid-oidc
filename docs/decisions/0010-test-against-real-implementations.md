@@ -1,6 +1,6 @@
 # 0010. Test against real protocol implementations, not scripted stubs
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Decided by:** @huwd
 - **Decided:** 2026-11-20
 - **Recorded:** 2026-11-20
