@@ -1,18 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { createApp as createBrokerApp, healthPath } from "./app.ts";
+import { healthPath } from "./app.ts";
 import { checkHealth } from "./healthcheck.ts";
-import { generateProviderKeys } from "./keys.ts";
-import { createProvider } from "./provider.ts";
 import { startServer } from "./server.ts";
+import { createTestBrokerApp } from "./test-support/broker-app.ts";
 
 const timeoutMs = 2_000;
-const issuer = "https://id.example.test";
-const keys = generateProviderKeys();
 
 function createApp() {
-  return createBrokerApp({ issuer, provider: createProvider({ issuer, keys }) });
+  return createTestBrokerApp("https://id.example.test");
 }
 
 describe("server", () => {

@@ -12,7 +12,7 @@ It does not store Pod data or enforce access control. A separate Solid server, s
 
 ## Status
 
-Early development. The service validates its configuration and publishes an OpenID discovery document and its public signing keys under the issuer URL. Nobody can log in yet, and it does not issue tokens.
+Early development. The broker publishes an OpenID discovery document and its public signing keys, logs people in through the upstream provider and maps them to a WebID. It issues ordinary OpenID Connect tokens, not Solid-OIDC ones yet. It has no way to register Solid apps yet, so in practice nobody can log in to one.
 
 [`docs/decisions/`](docs/decisions/README.md) records the design decisions made so far.
 
@@ -33,6 +33,27 @@ The service reads its configuration from environment variables at startup. It st
 | `PORT` | No | `3000` | Port to listen on. |
 
 The issuer appears in tokens and in each user's WebID profile as `solid:oidcIssuer`, so choose it once and keep it.
+
+### Registering the broker with the upstream provider
+
+Register the broker at the upstream provider as a confidential client, with a client secret, and this callback URL:
+
+```text
+<ISSUER_URL>/upstream/callback
+```
+
+For example, `https://id.example.org/upstream/callback`. The broker also logs the URL when it starts.
+It asks only for the `openid` scope, and always uses PKCE.
+In Pocket ID, create an OIDC client that is not public, and give it that callback URL.
+
+### How a login works
+
+1. A Solid app sends the person to the broker.
+2. The broker sends them on to the upstream provider to log in.
+3. The broker checks the upstream ID token and finds the WebID for its exact issuer and subject in the [accounts file](#accounts-file).
+4. The broker asks the person to confirm the app may use that WebID. It names the app and shows its client ID, since an app chooses its own name.
+
+If no WebID matches, the person sees the same page whatever the reason, so the page can't be used to discover who has an account. The broker logs the upstream subject, so an administrator can add it to the accounts file.
 
 ### Accounts file
 

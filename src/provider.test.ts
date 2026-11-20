@@ -2,22 +2,13 @@ import assert from "node:assert/strict";
 import { request } from "node:http";
 import { describe, it } from "node:test";
 
-import { createApp } from "./app.ts";
-import { generateProviderKeys } from "./keys.ts";
-import {
-  createProvider,
-  findNoAccount,
-  interactionUrl,
-  interactionUrlFor,
-  issuerPath,
-} from "./provider.ts";
+import { createStaticAccountStore } from "./accounts.ts";
+import { accountFinder, interactionUrl, interactionUrlFor, issuerPath } from "./provider.ts";
 import { type RunningServer, startServer } from "./server.ts";
-
-const keys = generateProviderKeys();
+import { createTestBrokerApp, testBrokerKeys as keys } from "./test-support/broker-app.ts";
 
 async function startBroker(issuer: string): Promise<RunningServer> {
-  const provider = createProvider({ issuer, keys });
-  return startServer({ app: createApp({ issuer, provider }), host: "127.0.0.1", port: 0 });
+  return startServer({ app: createTestBrokerApp(issuer), host: "127.0.0.1", port: 0 });
 }
 
 type Discovery = { issuer: string; jwks_uri: string; authorization_endpoint: string };
@@ -183,25 +174,40 @@ describe("provider at an issuer with a path", () => {
   });
 });
 
-describe("login interaction placeholder", () => {
-  it("explains that login is not available yet", async () => {
+describe("interaction routes without a login in progress", () => {
+  it("says the login has expired", async () => {
     await using server = await startBroker("https://example.test/solid");
 
     const response = await fetch(`http://127.0.0.1:${server.port}/solid/interaction/abc123`);
 
-    assert.equal(response.status, 503);
-    assert.deepEqual(await response.json(), {
-      error: "login_unavailable",
-      message: "Login is not available yet.",
-    });
+    assert.equal(response.status, 400);
+    assert.match(await response.text(), /This login has expired/);
+  });
+});
+
+describe("accountFinder", () => {
+  const webId = "https://alice.example.test/profile/card#me";
+  const findAccount = accountFinder(
+    createStaticAccountStore([
+      { upstreamIssuer: "https://auth.example.test", upstreamSubject: "a", webId },
+    ]),
+  );
+
+  it("loads a mapped WebID as an account whose subject is the WebID", async () => {
+    const account = await findAccount(undefined as never, webId);
+
+    assert.equal(account?.accountId, webId);
+    assert.deepEqual(await account?.claims("id_token", "openid", {}, []), { sub: webId });
+  });
+
+  it("loads nothing for a WebID that is no longer mapped", async () => {
+    const account = await findAccount(undefined as never, "https://mallory.example.test/#me");
+
+    assert.equal(account, undefined);
   });
 });
 
 describe("provider helpers", () => {
-  it("finds no account, so nobody can log in yet", () => {
-    assert.equal(findNoAccount(), undefined);
-  });
-
   it("puts interactions under the issuer's path", () => {
     assert.equal(interactionUrl({ prefix: "/solid", uid: "abc" }), "/solid/interaction/abc");
     assert.equal(interactionUrl({ prefix: "", uid: "abc" }), "/interaction/abc");

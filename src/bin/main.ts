@@ -6,11 +6,13 @@
 import { once } from "node:events";
 import { readFile } from "node:fs/promises";
 
-import { createApp } from "../app.ts";
+import { createApp, upstreamRedirectUri } from "../app.ts";
 import { loadOrCreateKeys } from "../keys.ts";
 import { loadConfig } from "../load-config.ts";
+import { createPendingLogins } from "../pending-logins.ts";
 import { createProvider } from "../provider.ts";
 import { startServer } from "../server.ts";
+import { createUpstreamClient } from "../upstream.ts";
 
 function exitWithErrors(errors: readonly string[]): never {
   for (const error of errors) {
@@ -33,12 +35,30 @@ if (!keys.ok) {
   exitWithErrors(keys.errors);
 }
 
-const provider = createProvider({ issuer: config.issuer, keys: keys.value });
-await using server = await startServer({
-  app: createApp({ issuer: config.issuer, provider }),
-  host: config.host,
-  port: config.port,
+const provider = createProvider({
+  accounts: config.accounts,
+  clients: [],
+  issuer: config.issuer,
+  keys: keys.value,
 });
+const upstream = createUpstreamClient({
+  clientId: config.upstream.clientId,
+  clientSecret: config.upstream.clientSecret,
+  issuer: config.upstream.issuer,
+  redirectUri: upstreamRedirectUri(config.issuer),
+});
+const app = createApp({
+  accounts: config.accounts,
+  issuer: config.issuer,
+  log: (entry) => console.log(JSON.stringify(entry)),
+  // Ten minutes is ample to log in upstream. The bound caps the memory that
+  // abandoned logins can take.
+  pendingLogins: createPendingLogins({ entriesMax: 10_000, now: Date.now, ttlMs: 10 * 60_000 }),
+  provider,
+  upstream,
+});
+
+await using server = await startServer({ app, host: config.host, port: config.port });
 console.log(
   JSON.stringify({
     level: "info",
@@ -46,6 +66,7 @@ console.log(
     issuer: config.issuer,
     port: server.port,
     upstreamIssuer: config.upstream.issuer,
+    upstreamRedirectUri: upstreamRedirectUri(config.issuer),
   }),
 );
 

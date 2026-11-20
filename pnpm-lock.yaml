@@ -172,6 +172,9 @@ importers:
       oidc-provider:
         specifier: 9.15.0
         version: 9.15.0
+      openid-client:
+        specifier: 6.9.0
+        version: 6.9.0
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -803,12 +806,18 @@ packages:
     resolution: {integrity: sha512-+EUsqGPLsM+j/zdChZjsnX51g4XrHFOIXwfnCVPGlQk/k5giakcKsuxCObBRu6DSm9opw/O6slWbJdghQM4bBg==}
     engines: {node: '>= 0.6'}
 
+  oauth4webapi@3.8.8:
+    resolution: {integrity: sha512-8N28E+a/oxfXWBgOMt+ZP/JUf/XR+IFbvkAEPP3gznXOMv9BpAAwiIj0TFNz3tGTPc0ZQ8zmWBNgN1nAys0gng==}
+
   oidc-provider@9.15.0:
     resolution: {integrity: sha512-iK12JdGBWRNMz8pAG6r3p//bvKOEmb4OBOApSQSflfoex9ar5xjeaYn9XrJHf6EFj/+Q/O478wM6BLGd9lVu+Q==}
 
   on-finished@2.4.2:
     resolution: {integrity: sha512-ATWUv387i+nLD49EiDoOft5scf32Vsdz3ktrQJG9bi7jRFmaXTssvyvj1EmeKVVgvesbqUtvQQvaS2TpTukAZQ==}
     engines: {node: '>= 0.8'}
+
+  openid-client@6.9.0:
+    resolution: {integrity: sha512-2IvamJR8PAnWHngaCsGGA8TYfcLI2egvuqa9cOQYHIISwIUhxJwwwcCnkgVX95fzZ6J0TAna0aVGUMOxnPeRqg==}
 
   parse-entities@4.0.2:
     resolution: {integrity: sha512-GG2AQYWoLgL877gQIKeRPGO1xF9+eG1ujIb5soS5gPvLQ1y2o8FL90w2QWNdf9I361Mpp7726c+lj3U0qK1uGw==}
@@ -1548,6 +1557,8 @@ snapshots:
 
   negotiator@0.6.3: {}
 
+  oauth4webapi@3.8.8: {}
+
   oidc-provider@9.15.0:
     dependencies:
       debug: 4.4.3
@@ -1559,6 +1570,11 @@ snapshots:
   on-finished@2.4.2:
     dependencies:
       ee-first: 1.1.1
+
+  openid-client@6.9.0:
+    dependencies:
+      jose: 6.2.17
+      oauth4webapi: 3.8.8
 
   parse-entities@4.0.2:
     dependencies:

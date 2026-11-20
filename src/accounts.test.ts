@@ -196,4 +196,13 @@ describe("createStaticAccountStore", () => {
 
     assert.deepEqual(webIds, [alice.webId, bob.webId]);
   });
+
+  it("knows the WebIDs it maps to, and no others", async () => {
+    const answers = await Promise.all([
+      store.hasWebId(alice.webId),
+      store.hasWebId("https://mallory.example.test/profile#me"),
+    ]);
+
+    assert.deepEqual(answers, [true, false]);
+  });
 });
