@@ -13,6 +13,17 @@ export type Result<T> =
 // run without TLS but a deployed one cannot.
 const loopbackHostnames: ReadonlySet<string> = new Set(["127.0.0.1", "[::1]", "localhost"]);
 
+/**
+ * The short code of a Node system error, such as ENOENT or EACCES. It says
+ * what to fix without repeating anything from the file involved.
+ */
+export function errorCode(error: unknown): string {
+  if (error instanceof Error && "code" in error && typeof error.code === "string") {
+    return error.code;
+  }
+  return "unknown error";
+}
+
 /** Format schema issues as "path: message", one per problem. */
 export function formatIssues(error: z.ZodError): string[] {
   return error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`);
