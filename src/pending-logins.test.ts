@@ -54,7 +54,21 @@ describe("createPendingLogins", () => {
     assert.ok(logins.take("newest"), "expected the newest login to be kept");
   });
 
-  it("clears expired logins before dropping a live one", () => {
+  it("moves a login started again to the back, as the newest", () => {
+    const logins = createPendingLogins({ entriesMax: 3, now: clock().now, ttlMs: 1_000 });
+    logins.put("first", newLoginChecks());
+    logins.put("second", newLoginChecks());
+    logins.put("first", newLoginChecks());
+    logins.put("third", newLoginChecks());
+    logins.put("fourth", newLoginChecks());
+
+    assert.equal(logins.take("second"), undefined, "expected the oldest login to be dropped");
+    assert.ok(logins.take("first"), "expected the restarted login to be kept");
+    assert.ok(logins.take("third"), "expected the third login to be kept");
+    assert.ok(logins.take("fourth"), "expected the newest login to be kept");
+  });
+
+  it("drops an expired login before a live one, since the oldest expires first", () => {
     const time = clock();
     const logins = createPendingLogins({ entriesMax: 2, now: time.now, ttlMs: 1_000 });
     logins.put("expired", newLoginChecks());
