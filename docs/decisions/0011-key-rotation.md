@@ -1,6 +1,6 @@
 # 0011. Rotate keys in timed steps, and revoke them separately
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Decided by:** @huwd
 - **Decided:** 2026-11-20
 - **Recorded:** 2026-11-20
