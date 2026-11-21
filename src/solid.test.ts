@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash, createPublicKey, verify } from "node:crypto";
+import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 
 import {
@@ -23,6 +23,7 @@ import {
   startHarness,
   visitUntilPage,
 } from "./test-support/login-harness.ts";
+import { checkSignature, decodeJwt } from "./test-support/tokens.ts";
 
 const clientId = `${appOrigin}/clientid.jsonld`;
 const solidApp = { client_id: clientId, redirect_uris: [`${appOrigin}/callback`] } as const;
@@ -38,39 +39,10 @@ async function logInAsSolidApp(harness: Harness, extra: Record<string, string> =
   return { callback, consent, login };
 }
 
-function decodeJwt(jwt: string): {
-  readonly header: Record<string, unknown>;
-  readonly payload: Record<string, unknown>;
-} {
-  const [header = "", payload = ""] = jwt.split(".");
-  return {
-    header: JSON.parse(Buffer.from(header, "base64url").toString("utf8")),
-    payload: JSON.parse(Buffer.from(payload, "base64url").toString("utf8")),
-  };
-}
-
 // Check the token's signature against the broker's published keys, as a
 // Solid server would.
 async function assertSignedByBroker(harness: Harness, jwt: string): Promise<void> {
-  const discovery = (await (
-    await fetch(`${harness.issuer}/.well-known/openid-configuration`)
-  ).json()) as {
-    jwks_uri: string;
-  };
-  const jwks = (await (await fetch(discovery.jwks_uri)).json()) as {
-    keys: (import("node:crypto").webcrypto.JsonWebKey & { kid: string })[];
-  };
-  const { header } = decodeJwt(jwt);
-  const jwk = jwks.keys.find((key) => key.kid === header["kid"]);
-  assert.ok(jwk, "expected the token's key in the broker's JWKS");
-  const [encodedHeader, encodedPayload, signature = ""] = jwt.split(".");
-  const valid = verify(
-    "sha256",
-    Buffer.from(`${encodedHeader}.${encodedPayload}`),
-    { dsaEncoding: "ieee-p1363", key: createPublicKey({ format: "jwk", key: jwk }) },
-    Buffer.from(signature, "base64url"),
-  );
-  assert.ok(valid, "expected a valid ES256 signature");
+  assert.equal(await checkSignature(harness.issuer, jwt), "valid");
 }
 
 async function jwkThumbprint(publicKey: CryptoKey): Promise<string> {

@@ -9,6 +9,11 @@ import Provider, {
 
 import type { AccountStore } from "./accounts.ts";
 import type { ProviderKeys } from "./keys.ts";
+import {
+  interactionLifetimeSeconds,
+  sessionLifetimeSeconds,
+  tokenLifetimeSeconds,
+} from "./lifetimes.ts";
 import { pageHeaders, renderErrorPage } from "./pages.ts";
 import { type SolidConfigurationOptions, solidConfiguration } from "./solid.ts";
 
@@ -46,6 +51,14 @@ export function createProvider(options: CreateProviderOptions): Provider {
     interactions: { url: interactionUrlFor(prefix) },
     renderError,
     jwks: { keys: options.keys.signingKeys.map((key) => ({ ...key })) },
+    // Set explicitly, because key rotation's waits depend on them.
+    ttl: {
+      AccessToken: tokenLifetimeSeconds,
+      Grant: sessionLifetimeSeconds,
+      IdToken: tokenLifetimeSeconds,
+      Interaction: interactionLifetimeSeconds,
+      Session: sessionLifetimeSeconds,
+    },
   };
 
   const provider = new Provider(options.issuer, configuration);

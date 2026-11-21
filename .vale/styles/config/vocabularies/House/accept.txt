@@ -43,6 +43,7 @@ tsc
 (?i)unhandled
 URIs?
 (?i)userland
+(?i)verifiers?
 Vitest
 zizmor
 Zod

@@ -1,5 +1,5 @@
 import { createHash, generateKeyPairSync, randomBytes } from "node:crypto";
-import { link, mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
+import { link, mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 
@@ -19,16 +19,48 @@ export type SigningKey = {
 
 /** Key material the provider needs to keep across restarts. */
 export type ProviderKeys = {
-  /** Keys for signing cookies, newest first. */
+  /** Keys for signing cookies, newest first. The first signs new cookies. */
   readonly cookieKeys: readonly string[];
-  /** Private keys for signing tokens, the one in use first. */
+  /**
+   * Private keys for signing tokens. The first signs new tokens. All of them
+   * are published, so tokens signed by any of them verify.
+   */
   readonly signingKeys: readonly SigningKey[];
+};
+
+/** A cookie key, and when it was added. */
+export type CookieKeyEntry = {
+  /** An ISO 8601 date and time. */
+  readonly addedAt: string;
+  readonly key: string;
+};
+
+/** A signing key, when it was added, and when it started signing tokens. */
+export type SigningKeyEntry = {
+  /** An ISO 8601 date and time. */
+  readonly addedAt: string;
+  readonly jwk: SigningKey;
+  /** When it started signing tokens, or null while it is only published. */
+  readonly promotedAt: string | null;
+};
+
+/**
+ * The contents of the key file. Signing keys are in signing order: the one
+ * that signs first, then older keys, then at most one published key that has
+ * not started signing yet. Cookie keys are newest first.
+ */
+export type KeyFile = {
+  readonly cookieKeys: readonly CookieKeyEntry[];
+  readonly signingKeys: readonly SigningKeyEntry[];
 };
 
 /** The name of the key file inside `DATA_DIR`. */
 export const keysFileName = "keys.json";
 
-const keysFileVersion = 1;
+/** The most keys of each kind the file holds. */
+export const keysMax = 10;
+
+const keysFileVersion = 2;
 const cookieKeyBytes = 32;
 
 // The file holds private keys. Anything more permissive than owner
@@ -37,33 +69,77 @@ const keysFileMode = 0o600;
 const groupAndOtherPermissions = 0o077;
 
 const Base64Url = z.string().regex(/^[A-Za-z0-9_-]+$/, "must be base64url");
+const CookieKey = z.string().min(cookieKeyBytes);
+const Timestamp = z.iso.datetime();
 
-const KeysFile = z.strictObject({
-  cookieKeys: z.array(z.string().min(cookieKeyBytes)).min(1).max(10),
+const SigningKeySchema = z.strictObject({
+  alg: z.literal("ES256"),
+  crv: z.literal("P-256"),
+  d: Base64Url,
+  kid: Base64Url,
+  kty: z.literal("EC"),
+  use: z.literal("sig"),
+  x: Base64Url,
+  y: Base64Url,
+});
+
+const KeysFileVersion1 = z.strictObject({
+  cookieKeys: z.array(CookieKey).min(1).max(keysMax),
+  signingKeys: z.array(SigningKeySchema).min(1).max(keysMax),
+  version: z.literal(1),
+});
+
+const KeysFileVersion2 = z.strictObject({
+  cookieKeys: z
+    .array(z.strictObject({ addedAt: Timestamp, key: CookieKey }))
+    .min(1)
+    .max(keysMax),
   signingKeys: z
     .array(
       z.strictObject({
-        alg: z.literal("ES256"),
-        crv: z.literal("P-256"),
-        d: Base64Url,
-        kid: Base64Url,
-        kty: z.literal("EC"),
-        use: z.literal("sig"),
-        x: Base64Url,
-        y: Base64Url,
+        addedAt: Timestamp,
+        jwk: SigningKeySchema,
+        promotedAt: Timestamp.nullable(),
       }),
     )
     .min(1)
-    .max(10),
+    .max(keysMax)
+    .refine((keys) => keys[0]?.promotedAt !== null, "the first key must have started signing")
+    .refine(
+      (keys) => keys.slice(0, -1).every((key) => key.promotedAt !== null),
+      "only the last key may be waiting to start signing",
+    ),
   version: z.literal(keysFileVersion),
 });
 
+/** The keys the provider uses, from the key file. */
+export function providerKeys(file: KeyFile): ProviderKeys {
+  return {
+    cookieKeys: file.cookieKeys.map((entry) => entry.key),
+    signingKeys: file.signingKeys.map((entry) => entry.jwk),
+  };
+}
+
+/** A key file with one fresh key of each kind, both in use from `now`. */
+export function newKeyFile(now: number): KeyFile {
+  const at = new Date(now).toISOString();
+  return {
+    cookieKeys: [newCookieKey(now)],
+    signingKeys: [{ addedAt: at, jwk: generateSigningKey(), promotedAt: at }],
+  };
+}
+
+/** A fresh cookie key, added at `now`. */
+export function newCookieKey(now: number): CookieKeyEntry {
+  return {
+    addedAt: new Date(now).toISOString(),
+    key: randomBytes(cookieKeyBytes).toString("base64url"),
+  };
+}
+
 /** Generate a fresh signing key and cookie key. */
 export function generateProviderKeys(): ProviderKeys {
-  return {
-    cookieKeys: [randomBytes(cookieKeyBytes).toString("base64url")],
-    signingKeys: [generateSigningKey()],
-  };
+  return providerKeys(newKeyFile(Date.now()));
 }
 
 /**
@@ -71,23 +147,34 @@ export function generateProviderKeys(): ProviderKeys {
  * Later starts reuse the same keys, so tokens and sessions issued before a
  * restart stay valid.
  */
-export async function loadOrCreateKeys(dataDir: string): Promise<Result<ProviderKeys>> {
-  const path = join(dataDir, keysFileName);
+export async function loadOrCreateKeys(options: {
+  readonly dataDir: string;
+  readonly now: () => number;
+}): Promise<Result<ProviderKeys>> {
+  const loaded = await loadOrCreateKeyFile(options);
+  return loaded.ok ? { ok: true, value: providerKeys(loaded.value) } : loaded;
+}
+
+async function loadOrCreateKeyFile(options: {
+  readonly dataDir: string;
+  readonly now: () => number;
+}): Promise<Result<KeyFile>> {
+  const path = join(options.dataDir, keysFileName);
   const existing = await readKeysFile(path);
   if (existing.kind === "found") {
     return existing.result;
   }
 
-  const keys = generateProviderKeys();
+  const file = newKeyFile(options.now());
   let created: boolean;
   try {
-    await mkdir(dataDir, { mode: 0o700, recursive: true });
-    created = await createExclusively({ contents: serialise(keys), path });
+    await mkdir(options.dataDir, { mode: 0o700, recursive: true });
+    created = await createExclusively({ contents: serialise(file), path });
   } catch (error) {
     return { ok: false, errors: [`DATA_DIR: could not create ${path} (${errorCode(error)})`] };
   }
   if (created) {
-    return { ok: true, value: keys };
+    return { ok: true, value: file };
   }
   // Another process created the file first. Use its keys, so both agree.
   const raced = await readKeysFile(path);
@@ -99,18 +186,49 @@ export async function loadOrCreateKeys(dataDir: string): Promise<Result<Provider
   return raced.result;
 }
 
+/**
+ * Read the key file for a key command. Unlike a start, a missing file is an
+ * error: there are no keys to rotate.
+ */
+export async function readKeyFile(dataDir: string): Promise<Result<KeyFile>> {
+  const path = join(dataDir, keysFileName);
+  const read = await readKeysFile(path);
+  if (read.kind === "missing") {
+    return {
+      ok: false,
+      errors: [`DATA_DIR: ${path} does not exist. Start the broker once to create it.`],
+    };
+  }
+  return read.result;
+}
+
+/**
+ * Replace the key file. The new contents are written to a temporary file
+ * readable only by its owner, then renamed into place, so a reader sees
+ * either the old file or the new one, never part of either.
+ */
+export async function replaceKeyFile(dataDir: string, file: KeyFile): Promise<Result<void>> {
+  const path = join(dataDir, keysFileName);
+  const temporaryPath = temporaryPathFor(path);
+  try {
+    await writeFile(temporaryPath, serialise(file), { flag: "wx", mode: keysFileMode });
+    await rename(temporaryPath, path);
+  } catch (error) {
+    await unlink(temporaryPath).catch(() => undefined);
+    return { ok: false, errors: [`DATA_DIR: could not write ${path} (${errorCode(error)})`] };
+  }
+  return { ok: true, value: undefined };
+}
+
 type ReadOutcome =
-  | { readonly kind: "found"; readonly result: Result<ProviderKeys> }
+  | { readonly kind: "found"; readonly result: Result<KeyFile> }
   | { readonly kind: "missing" };
 
 async function readKeysFile(path: string): Promise<ReadOutcome> {
   let text: string;
-  let mode: number;
+  let stats: { readonly mode: number; readonly mtimeMs: number };
   try {
-    [text, mode] = await Promise.all([
-      readFile(path, { encoding: "utf8" }),
-      stat(path).then((stats) => stats.mode),
-    ]);
+    [text, stats] = await Promise.all([readFile(path, { encoding: "utf8" }), stat(path)]);
   } catch (error) {
     const code = errorCode(error);
     if (code === "ENOENT") {
@@ -120,17 +238,18 @@ async function readKeysFile(path: string): Promise<ReadOutcome> {
     return { kind: "found", result: { ok: false, errors } };
   }
 
-  if ((mode & groupAndOtherPermissions) !== 0) {
+  if ((stats.mode & groupAndOtherPermissions) !== 0) {
     const errors = [`DATA_DIR: ${path} must be readable only by its owner (mode 600)`];
     return { kind: "found", result: { ok: false, errors } };
   }
-  return { kind: "found", result: parseKeysFile({ path, text }) };
+  return { kind: "found", result: parseKeysFile({ modifiedAt: stats.mtimeMs, path, text }) };
 }
 
 function parseKeysFile(options: {
+  readonly modifiedAt: number;
   readonly path: string;
   readonly text: string;
-}): Result<ProviderKeys> {
+}): Result<KeyFile> {
   let json: unknown;
   try {
     json = JSON.parse(options.text);
@@ -139,15 +258,38 @@ function parseKeysFile(options: {
     return { ok: false, errors: [`DATA_DIR: ${options.path} is not valid JSON`] };
   }
 
-  const parsed = KeysFile.safeParse(json);
+  // A file from before key rotation has no dates. Treat its keys as added,
+  // and in use, when the file was last written. Every wait is measured from
+  // a newer key's date, so these dates only appear in the key command's list.
+  const isVersion1 =
+    typeof json === "object" && json !== null && "version" in json && json.version === 1;
+  if (isVersion1) {
+    const version1 = KeysFileVersion1.safeParse(json);
+    if (!version1.success) {
+      return { ok: false, errors: issuesIn(options.path, version1.error) };
+    }
+    const at = new Date(options.modifiedAt).toISOString();
+    return {
+      ok: true,
+      value: {
+        cookieKeys: version1.data.cookieKeys.map((key) => ({ addedAt: at, key })),
+        signingKeys: version1.data.signingKeys.map((jwk) => ({ addedAt: at, jwk, promotedAt: at })),
+      },
+    };
+  }
+
+  const parsed = KeysFileVersion2.safeParse(json);
   if (!parsed.success) {
-    const errors = formatIssues(parsed.error).map((error) => `DATA_DIR: ${options.path}: ${error}`);
-    return { ok: false, errors };
+    return { ok: false, errors: issuesIn(options.path, parsed.error) };
   }
   return {
     ok: true,
     value: { cookieKeys: parsed.data.cookieKeys, signingKeys: parsed.data.signingKeys },
   };
+}
+
+function issuesIn(path: string, error: z.ZodError): string[] {
+  return formatIssues(error).map((issue) => `DATA_DIR: ${path}: ${issue}`);
 }
 
 // Write to a temporary file, then hard-link it into place. The link fails if
@@ -158,7 +300,7 @@ async function createExclusively(options: {
   readonly contents: string;
   readonly path: string;
 }): Promise<boolean> {
-  const temporaryPath = `${options.path}.${randomBytes(8).toString("hex")}.tmp`;
+  const temporaryPath = temporaryPathFor(options.path);
   await writeFile(temporaryPath, options.contents, { flag: "wx", mode: keysFileMode });
 
   let linked = true;
@@ -166,7 +308,7 @@ async function createExclusively(options: {
     await link(temporaryPath, options.path);
   } catch (error) {
     /* node:coverage ignore next 5 */
-    // Platform-specific: only a filesystem without hard links fails this way.
+    // Platform-specific: only a file system without hard links fails this way.
     if (errorCode(error) !== "EEXIST") {
       await unlink(temporaryPath);
       throw error;
@@ -178,11 +320,16 @@ async function createExclusively(options: {
   return linked;
 }
 
-function serialise(keys: ProviderKeys): string {
-  return `${JSON.stringify({ ...keys, version: keysFileVersion }, null, 2)}\n`;
+function temporaryPathFor(path: string): string {
+  return `${path}.${randomBytes(8).toString("hex")}.tmp`;
 }
 
-function generateSigningKey(): SigningKey {
+function serialise(file: KeyFile): string {
+  return `${JSON.stringify({ ...file, version: keysFileVersion }, null, 2)}\n`;
+}
+
+/** Generate a fresh ES256 signing key, whose ID is its thumbprint. */
+export function generateSigningKey(): SigningKey {
   const { privateKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
   const jwk = privateKey.export({ format: "jwk" });
   /* node:coverage ignore next 4 */

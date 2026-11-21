@@ -210,6 +210,24 @@ describe("removeExpired", () => {
   });
 });
 
+describe("removeAll", () => {
+  it("removes every record of every model, expired or not", async () => {
+    using database = open(":memory:");
+    await Promise.all([
+      database.adapter("Session").upsert("session", {}, 1_000),
+      database.adapter("Grant").upsert("grant", {}, 1_000),
+      database.adapter("RefreshToken").upsert("refresh", { grantId: "grant" }, 1_000),
+      database.adapter("Client").upsert("forever", {}, undefined),
+    ]);
+
+    const removed = database.removeAll();
+
+    assert.equal(removed, 4);
+    assert.equal(await database.adapter("Session").find("session"), undefined);
+    assert.equal(await database.adapter("Client").find("forever"), undefined);
+  });
+});
+
 describe("backUp", () => {
   it("writes a consistent copy readable only by its owner", async () => {
     using database = open(freshPath());

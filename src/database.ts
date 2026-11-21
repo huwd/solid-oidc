@@ -17,6 +17,11 @@ export type ProviderDatabase = Disposable & {
    * a new file readable only by its owner. Refuses to overwrite a file.
    */
   backUp(destination: string): Promise<Result<void>>;
+  /**
+   * Delete every session, grant, code and token, and return how many went.
+   * Everyone has to log in again.
+   */
+  removeAll(): number;
   /** Delete up to `limit` expired records, and return how many went. */
   removeExpired(limit: number): number;
 };
@@ -113,6 +118,7 @@ function providerDatabase(options: {
     findByUserCode: database.prepare(
       "SELECT payload, consumed_at FROM records WHERE model = ? AND user_code = ? AND (expires_at IS NULL OR expires_at > ?)",
     ),
+    removeAll: database.prepare("DELETE FROM records"),
     removeExpired: database.prepare(
       "DELETE FROM records WHERE rowid IN (SELECT rowid FROM records WHERE expires_at <= ? LIMIT ?)",
     ),
@@ -177,6 +183,7 @@ function providerDatabase(options: {
       }
       return { ok: true, value: undefined };
     },
+    removeAll: () => Number(statements.removeAll.run().changes),
     removeExpired: (limit) => Number(statements.removeExpired.run(now(), limit).changes),
     [Symbol.dispose]: () => database.close(),
   };

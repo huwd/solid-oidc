@@ -5,7 +5,7 @@ import { type Account, createStaticAccountStore } from "../accounts.ts";
 import { createApp, upstreamRedirectUri } from "../app.ts";
 import { openDatabase, type ProviderDatabase } from "../database.ts";
 import type { LogEntry } from "../interactions.ts";
-import { generateProviderKeys } from "../keys.ts";
+import { generateProviderKeys, type ProviderKeys } from "../keys.ts";
 import { createPendingLogins } from "../pending-logins.ts";
 import { createProvider } from "../provider.ts";
 import { createUpstreamClient } from "../upstream.ts";
@@ -18,7 +18,7 @@ import { startUpstreamProvider, type UpstreamProvider } from "./upstream-provide
  * upstream provider, each a real OpenID implementation on loopback.
  */
 
-const keys = generateProviderKeys();
+const defaultKeys = generateProviderKeys();
 export const appOrigin = "https://app.example.test";
 export const aliceSubject = "8c1f6d2e-0000-4000-8000-a11ce0000000";
 export const aliceWebId = "https://alice.example.test/profile/card#me";
@@ -42,9 +42,10 @@ export type Harness = AsyncDisposable & {
   readonly logs: LogEntry[];
   /**
    * Replace the broker with a new one on the same origin, as a restart does:
-   * nothing survives but the database file and the keys.
+   * nothing survives but the database file and the keys. Pass `keys` to
+   * restart with changed keys, as after a key command.
    */
-  restartBroker(): void;
+  restartBroker(options?: { readonly keys?: ProviderKeys }): void;
   readonly upstream: UpstreamProvider;
 };
 
@@ -55,6 +56,8 @@ export async function startHarness(
     readonly databasePath?: string;
     /** Serves Client ID Documents. By default, every fetch fails. */
     readonly fetch?: typeof globalThis.fetch;
+    /** The broker's keys. By default, keys shared by every harness. */
+    readonly keys?: ProviderKeys;
     /** Point the broker at this upstream issuer instead of the stand-in. */
     readonly upstreamIssuer?: string;
   } = {},
@@ -68,8 +71,10 @@ export async function startHarness(
   const accounts = createStaticAccountStore(mapping(upstream.issuer));
   const logs: LogEntry[] = [];
   let database: ProviderDatabase | undefined;
+  let keys = options.keys ?? defaultKeys;
 
-  function startBroker(): void {
+  function startBroker(restart: { readonly keys?: ProviderKeys } = {}): void {
+    keys = restart.keys ?? keys;
     database?.[Symbol.dispose]();
     const opened = openDatabase({ now: Date.now, path: options.databasePath ?? ":memory:" });
     assert.ok(opened.ok, `expected the database to open: ${JSON.stringify(opened)}`);
@@ -162,6 +167,19 @@ export function visitUntilPage(
   method?: "POST",
 ): Promise<Visit> {
   return harness.browser.visit(url, { method, stopAt: toApp });
+}
+
+/**
+ * Follow a login that the broker's own session should answer, stopping if it
+ * returns to the app or goes to the upstream provider. The stand-in upstream
+ * keeps its own session, so a lost broker session would otherwise be hidden
+ * by the upstream logging the same person straight back in.
+ */
+export function visitUsingBrokerSession(harness: Harness, url: URL | string): Promise<Visit> {
+  const upstreamOrigin = new URL(harness.upstream.issuer).origin;
+  return harness.browser.visit(url, {
+    stopAt: (location) => toApp(location) || location.origin === upstreamOrigin,
+  });
 }
 
 export function formAction(page: Visit, button: "Allow" | "Deny"): URL {
