@@ -52,6 +52,10 @@ describe("rotate", () => {
     assert.equal(rotated.cookieKeys.length, 2);
     assert.ok(step.ok);
     assert.match(step.value.changes[0] ?? "", /Promote it from 2026-03-01T09:11:00\.000Z\.$/);
+    assert.equal(
+      step.value.changes[1],
+      "Added a cookie key, which signs cookies from the next start.",
+    );
   });
 
   it("refuses while a new signing key is still waiting", () => {
@@ -62,16 +66,32 @@ describe("rotate", () => {
     ]);
   });
 
-  it("refuses when the file holds as many keys as it can", () => {
-    let file = newKeyFile(start);
+  describe("when the file holds as many keys of one kind as it can", () => {
+    let full = newKeyFile(start);
     for (let index = 1; index < keysMax; index += 1) {
-      file = ok(promote(ok(rotate(file, { now: start })), { now: start, skipWait: true }));
+      full = ok(promote(ok(rotate(full, { now: start })), { now: start, skipWait: true }));
+    }
+    const refusal = [
+      `The key file already holds ${keysMax} keys of one kind. Retire old keys first.`,
+    ];
+
+    for (const [kind, file] of [
+      ["signing", { ...full, cookieKeys: full.cookieKeys.slice(0, 1) }],
+      ["cookie", { ...full, signingKeys: full.signingKeys.slice(0, 1) }],
+    ] as const) {
+      it(`refuses with ${keysMax} ${kind} keys`, () => {
+        assert.deepEqual(errors(rotate(file, { now: start })), refusal);
+      });
     }
 
-    assert.equal(file.signingKeys.length, keysMax);
-    assert.deepEqual(errors(rotate(file, { now: start })), [
-      `The key file already holds ${keysMax} keys of one kind. Retire old keys first.`,
-    ]);
+    it(`allows one fewer than ${keysMax} of each`, () => {
+      const file = {
+        cookieKeys: full.cookieKeys.slice(0, keysMax - 1),
+        signingKeys: full.signingKeys.slice(0, keysMax - 1),
+      };
+
+      ok(rotate(file, { now: start }));
+    });
   });
 });
 
@@ -180,10 +200,16 @@ describe("retire", () => {
     const { file } = rotatedAndPromoted();
     const waiting = ok(rotate(file, { now: start + publishWaitMs }));
 
-    const retired = ok(retire(waiting, { now: start + publishWaitMs, skipWait: true }));
+    const step = retire(waiting, { now: start + publishWaitMs, skipWait: true });
+    const retired = ok(step);
 
     assert.deepEqual(kids(retired), [kids(waiting)[0], kids(waiting)[2]]);
     assert.equal(retired.cookieKeys.length, 1);
+    assert.ok(step.ok);
+    assert.deepEqual(step.value.changes, [
+      `Retired signing key ${kids(waiting)[1]}.`,
+      "Retired 2 cookie keys.",
+    ]);
   });
 
   it("finds nothing to retire in a file with no keys", () => {
@@ -206,6 +232,8 @@ describe("retire", () => {
 
     assert.deepEqual(kids(retired), kids(rotated));
     assert.equal(retired.cookieKeys.length, 1);
+    assert.ok(step.ok);
+    assert.deepEqual(step.value.changes, ["Retired 1 cookie key."]);
   });
 });
 
