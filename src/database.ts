@@ -84,6 +84,8 @@ export function openDatabase(options: OpenDatabaseOptions): Result<ProviderDatab
     if (version === 0) {
       database.exec(`BEGIN; ${schema} COMMIT;`);
     } else if (version !== schemaVersion) {
+      // Stryker disable next-line CallExpression: the handle isn't returned, so tests can't see it
+      // closed. Closing frees it now rather than at garbage collection.
       database.close();
       const errors = [
         `DATA_DIR: ${options.path} has schema version ${version}, but this broker knows only version ${schemaVersion}`,
@@ -91,6 +93,7 @@ export function openDatabase(options: OpenDatabaseOptions): Result<ProviderDatab
       return { ok: false, errors };
     }
   } catch (error) {
+    // Stryker disable next-line CallExpression: as above.
     database.close();
     return {
       ok: false,
@@ -157,6 +160,8 @@ function providerDatabase(options: {
         return Promise.resolve();
       },
       upsert: (id, payload, expiresIn) => {
+        // Stryker disable next-line ConditionalExpression: without the check, the sum is NaN,
+        // which SQLite also stores as NULL. The check says what's meant.
         const expiresAt = expiresIn === undefined ? null : now() + expiresIn * 1000;
         statements.upsert.run(
           model,
@@ -191,6 +196,7 @@ function providerDatabase(options: {
 
 function readSchemaVersion(database: DatabaseSync): number {
   const row = database.prepare("PRAGMA user_version").get();
+  // Stryker disable next-line OptionalChaining: PRAGMA user_version always returns a row.
   return Number(row?.["user_version"]);
 }
 
