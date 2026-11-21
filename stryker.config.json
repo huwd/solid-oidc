@@ -1,0 +1,39 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "testRunner": "tap",
+  "tap": {
+    "testFiles": ["src/*.test.ts"],
+    "nodeArgs": ["--test-reporter=tap"]
+  },
+  "mutate": [
+    "src/interactions.ts",
+    "src/accounts.ts",
+    "src/upstream.ts",
+    "src/solid.ts",
+    "src/provider.ts",
+    "src/keys.ts",
+    "src/database.ts",
+    "src/pending-logins.ts",
+    "src/key-rotation.ts"
+  ],
+  "coverageAnalysis": "perTest",
+  "reporters": ["clear-text", "progress", "json"],
+  "tempDirName": ".stryker-tmp",
+  "tsconfigFile_comment": "Stryker's tsconfig rewriting needs the classic TypeScript compiler API, which TypeScript 7 doesn't have. Our tsconfig.json has no extends or references to rewrite, so point it at no file.",
+  "tsconfigFile": "no-tsconfig-for-stryker.json",
+  "ignorePatterns": [".devenv", ".direnv", "coverage", "sandbox", "docs", "reports"],
+  "plugins": ["@stryker-mutator/tap-runner"],
+  "jsonReporter": {
+    "fileName": "reports/mutation/mutation.json"
+  },
+  "thresholds": {
+    "high": 100,
+    "low": 100,
+    "break": 100
+  },
+  "thresholds_comment": "Every mutant must be killed, or recorded with a Stryker disable comment giving the reason it is equivalent. See docs/testing.md.",
+  "clearTextReporter": {
+    "allowColor": false,
+    "reportTests": false
+  }
+}
