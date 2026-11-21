@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { upstreamRedirectUri } from "./app.ts";
+import { pageHeaders } from "./pages.ts";
 import { createBrowser, type Visit } from "./test-support/browser.ts";
 import {
   alice,
@@ -19,6 +20,29 @@ import {
   visitUntilPage,
 } from "./test-support/login-harness.ts";
 import { listenOnLoopback } from "./test-support/loopback.ts";
+
+/** Check a page the broker shows, including the headers that keep it out of caches and frames. */
+function assertPage(visit: Visit, expected: { status: number; heading: string; message?: string }) {
+  assert.equal(visit.status, expected.status, `expected ${expected.status}, got ${visit.status}`);
+  for (const [name, value] of Object.entries(pageHeaders)) {
+    assert.equal(visit.headers.get(name), value, `expected the ${name} header`);
+  }
+  assert.ok(visit.body.includes(expected.heading), `expected the heading ${expected.heading}`);
+  if (expected.message !== undefined) {
+    assert.ok(visit.body.includes(expected.message), `expected the message ${expected.message}`);
+  }
+}
+
+const expiredPage = {
+  heading: "This login has expired",
+  message: "Go back to the app and start again.",
+  status: 400,
+};
+const unavailableStepPage = {
+  heading: "This page is not available",
+  message: "Go back to the app and start again.",
+  status: 400,
+};
 
 describe("logging in through the upstream provider", () => {
   it("ends with an ID token for the mapped WebID", async () => {
@@ -41,7 +65,7 @@ describe("logging in through the upstream provider", () => {
 
     const consent = await visitUntilPage(harness, login.authorizationUrl);
 
-    assert.equal(consent.status, 200);
+    assertPage(consent, { heading: "wants to act as", status: 200 });
     assert.match(consent.body, /Test &lt;App&gt; \(<code>test-app<\/code>\)/);
     assert.ok(
       consent.body.includes(`<code>${aliceWebId}</code>`),
@@ -87,13 +111,18 @@ describe("logging in through the upstream provider", () => {
     const callback = await visitUntilPage(harness, formAction(consent, "Deny"), "POST");
 
     assert.equal(callback.url.searchParams.get("error"), "access_denied");
+    assert.equal(callback.url.searchParams.get("error_description"), "The person declined.");
   });
 });
 
 describe("refusing a login", () => {
   async function assertRefused(harness: Harness, visit: Visit) {
-    assert.equal(visit.status, 403, `expected a refusal, got ${visit.status}`);
-    assert.match(visit.body, /You could not be logged in/);
+    assertPage(visit, {
+      heading: "You could not be logged in",
+      message:
+        "Go back to the app and try again. If this keeps happening, contact the administrator.",
+      status: 403,
+    });
     assert.ok(!visit.body.includes(aliceSubject), "the page must not reveal the subject");
     assert.ok(!visit.body.includes("webid") && !visit.body.includes("WebID"));
     return harness.logs;
@@ -142,6 +171,8 @@ describe("refusing a login", () => {
     });
 
     const logs = await assertRefused(harness, visit);
+    assert.equal(logs.at(-1)?.level, "warn");
+    assert.equal(logs.at(-1)?.message, "Login refused");
     assert.match(logs.at(-1)?.["error"] ?? "", /state/i);
   });
 
@@ -190,16 +221,35 @@ describe("refusing a login", () => {
 
     await assertRefused(harness, visit);
   });
+
+  for (const [name, query] of [
+    ["a state that names no interaction", "state=no-interaction-here"],
+    ["two states", "state=abc.first&state=abc.second"],
+  ] as const) {
+    it(`refuses a callback with ${name}`, async () => {
+      await using harness = await startHarness();
+
+      const visit = await visitUntilPage(
+        harness,
+        `${upstreamRedirectUri(harness.issuer)}?${query}`,
+      );
+
+      await assertRefused(harness, visit);
+    });
+  }
+
+  it("only answers the upstream provider's callback to a GET", async () => {
+    await using harness = await startHarness();
+    const callback = await captureUpstreamCallback(harness);
+
+    const visit = await visitUntilPage(harness, callback, "POST");
+
+    assert.equal(visit.status, 404);
+  });
 });
 
 describe("binding each login to its browser", () => {
-  async function captureCallback(harness: Harness): Promise<URL> {
-    const login = await appLogin(harness);
-    const visit = await harness.browser.visit(login.authorizationUrl, {
-      stopAt: (location) => location.pathname.endsWith("/upstream/callback"),
-    });
-    return visit.url;
-  }
+  const captureCallback = captureUpstreamCallback;
 
   it("won't finish a login in a browser that didn't start it", async () => {
     await using harness = await startHarness();
@@ -207,8 +257,7 @@ describe("binding each login to its browser", () => {
 
     const visit = await createBrowser().visit(callback, { stopAt: toApp });
 
-    assert.equal(visit.status, 400);
-    assert.match(visit.body, /This login has expired/);
+    assertPage(visit, expiredPage);
   });
 
   it("won't use the same callback twice", async () => {
@@ -218,7 +267,7 @@ describe("binding each login to its browser", () => {
 
     const replay = await visitUntilPage(harness, callback);
 
-    assert.equal(replay.status, 400);
+    assertPage(replay, expiredPage);
   });
 
   it("won't resume a login that has no pending upstream request", async () => {
@@ -235,8 +284,7 @@ describe("binding each login to its browser", () => {
     await visitUntilPage(harness, resume);
     const visit = await visitUntilPage(harness, resume);
 
-    assert.equal(visit.status, 400);
-    assert.match(visit.body, /This login has expired/);
+    assertPage(visit, expiredPage);
   });
 
   it("won't act on an interaction the browser's cookie doesn't name", async () => {
@@ -245,8 +293,7 @@ describe("binding each login to its browser", () => {
 
     const visit = await visitUntilPage(harness, `${harness.issuer}/interaction/someone-elses-uid`);
 
-    assert.equal(visit.status, 400);
-    assert.match(visit.body, /This login has expired/);
+    assertPage(visit, expiredPage);
   });
 
   it("refuses a step that doesn't fit the interaction", async () => {
@@ -260,8 +307,18 @@ describe("binding each login to its browser", () => {
       "POST",
     );
 
-    assert.equal(visit.status, 400);
-    assert.match(visit.body, /This page is not available/);
+    assertPage(visit, unavailableStepPage);
+  });
+
+  it("refuses an upstream return once the login is waiting for consent", async () => {
+    await using harness = await startHarness();
+    const login = await appLogin(harness);
+    const consent = await visitUntilPage(harness, login.authorizationUrl);
+    const confirm = new URL(formAction(consent, "Allow"));
+
+    const visit = await visitUntilPage(harness, confirm.href.replace(/\/confirm$/, "/upstream"));
+
+    assertPage(visit, unavailableStepPage);
   });
 });
 
@@ -275,8 +332,20 @@ describe("an unavailable upstream provider", () => {
 
     const visit = await visitUntilPage(harness, login.authorizationUrl);
 
-    assert.equal(visit.status, 502);
-    assert.match(visit.body, /Login is not available/);
+    assertPage(visit, {
+      heading: "Login is not available",
+      message: "The login service could not be reached. Try again later.",
+      status: 502,
+    });
+    assert.equal(harness.logs.at(-1)?.level, "warn");
     assert.equal(harness.logs.at(-1)?.message, "Upstream unavailable");
   });
 });
+
+async function captureUpstreamCallback(harness: Harness): Promise<URL> {
+  const login = await appLogin(harness);
+  const visit = await harness.browser.visit(login.authorizationUrl, {
+    stopAt: (location) => location.pathname.endsWith("/upstream/callback"),
+  });
+  return visit.url;
+}
