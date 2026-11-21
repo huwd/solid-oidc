@@ -1,6 +1,10 @@
 node_modules/
 coverage/
 
+# Mutation testing: Stryker's sandbox and its reports
+.stryker-tmp/
+reports/
+
 # devenv
 .devenv*
 devenv.local.nix

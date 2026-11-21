@@ -77,6 +77,7 @@ export function interactionRoutes(options: InteractionRoutesOptions): Koa.Middle
       return;
     }
 
+    // Stryker disable next-line OptionalChaining: match is set, since uid came from it.
     const step = `${context.method} ${match?.[2] ?? ""}`;
     try {
       await handleStep({ context, options, step, uid });
@@ -102,6 +103,7 @@ async function handleStep(input: {
   const { context, options, step, uid } = input;
   const interaction = await options.provider.interactionDetails(context.req, context.res);
   if (interaction.uid !== uid) {
+    // Stryker disable next-line StringLiteral: interactionRoutes replaces the message with a page.
     throw new errors.SessionNotFound("interaction does not match its cookie");
   }
 
@@ -110,7 +112,11 @@ async function handleStep(input: {
     await startUpstreamLogin({ context, options, uid });
   } else if (step === "GET upstream" && prompt === "login") {
     await finishUpstreamLogin({ context, options, uid });
-  } else if (step === "GET " && prompt === "consent") {
+  } else if (
+    step === "GET " &&
+    // Stryker disable next-line ConditionalExpression: the broker's only prompts are login and consent.
+    prompt === "consent"
+  ) {
     await showConsent({ context, interaction, options, uid });
   } else if (step === "POST confirm" && prompt === "consent") {
     await confirmConsent({ context, interaction, options });
@@ -155,6 +161,7 @@ async function startUpstreamLogin({ context, options, uid }: StepInput): Promise
 async function finishUpstreamLogin({ context, options, uid }: StepInput): Promise<void> {
   const checks = options.pendingLogins.take(uid);
   if (checks === undefined) {
+    // Stryker disable next-line StringLiteral: interactionRoutes replaces the message with a page.
     throw new errors.SessionNotFound("no pending upstream login");
   }
 
@@ -197,6 +204,8 @@ async function showConsent(
   context.body = renderConsentPage({
     abortPath: `${base}/abort`,
     clientId,
+    // Stryker disable next-line OptionalChaining: the provider loaded this client to start the
+    // interaction and caches it, so tests can't make it disappear. Kept in case it does.
     clientName: client?.clientName,
     confirmPath: `${base}/confirm`,
     webId: accountOf(interaction),
@@ -213,19 +222,24 @@ async function confirmConsent(input: {
   const details = ConsentDetails.parse(interaction.prompt.details);
   const { Grant } = options.provider;
   const existing =
+    // Stryker disable next-line ConditionalExpression: Grant.find(undefined) also finds nothing.
     interaction.grantId === undefined ? undefined : await Grant.find(interaction.grantId);
   const grant =
     existing ?? new Grant({ accountId, clientId: String(interaction.params["client_id"]) });
 
+  // Stryker disable next-line ConditionalExpression: unreachable. The Solid resource's only
+  // scope, webid, is an OpenID scope too, so consent never lacks a resource scope alone.
   if (details.missingOIDCScope !== undefined) {
     grant.addOIDCScope(details.missingOIDCScope);
   }
-  /* node:coverage ignore next 5 */
+  /* node:coverage ignore next 6 */
   // Unreachable: the claims request parameter is turned off, so a client can
   // ask for claims, such as webid, only through scopes.
+  // Stryker disable all: unreachable, as above.
   if (details.missingOIDCClaims !== undefined) {
     grant.addOIDCClaims(details.missingOIDCClaims);
   }
+  // Stryker restore all
 
   for (const [resource, scopes] of Object.entries(details.missingResourceScopes ?? {})) {
     grant.addResourceScope(resource, scopes);
@@ -241,20 +255,22 @@ async function finish(input: {
   readonly result: Parameters<Provider["interactionResult"]>[2];
 }): Promise<void> {
   const { context, options, result } = input;
-  const returnTo = await options.provider.interactionResult(context.req, context.res, result, {
-    mergeWithLastSubmission: true,
-  });
+  // The provider merges this with the login's result, so consent keeps the account.
+  const returnTo = await options.provider.interactionResult(context.req, context.res, result);
   context.status = 303;
   context.redirect(returnTo);
 }
 
 function accountOf(interaction: Interaction): string {
+  // Stryker disable next-line OptionalChaining: unreachable, as below.
   const accountId = interaction.session?.accountId;
-  /* node:coverage ignore next 4 */
+  /* node:coverage ignore next 5 */
   // Unreachable: the provider asks for consent only after a login.
+  // Stryker disable all: unreachable, as above.
   if (accountId === undefined) {
     throw new errors.SessionNotFound("consent without a login");
   }
+  // Stryker restore all
   return accountId;
 }
 

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -104,6 +104,21 @@ describe("openDatabase", () => {
 
     assert.ok(!opened.ok, "expected a non-database file to be refused");
     assert.match(opened.errors[0] ?? "", /^DATA_DIR: could not open .* \(ERR_SQLITE_ERROR\)$/);
+  });
+});
+
+describe("an in-memory database", () => {
+  it("touches no file", () => {
+    using _database = open(":memory:");
+
+    assert.ok(!existsSync(join(process.cwd(), ":memory:")), "expected no file named :memory:");
+  });
+
+  it("is closed when disposed", () => {
+    const database = open(":memory:");
+    database[Symbol.dispose]();
+
+    assert.throws(() => database.removeAll(), /finalized/);
   });
 });
 
@@ -276,6 +291,20 @@ describe("scheduleRemoval", () => {
     assert.deepEqual(logs, [
       { level: "info", message: "Removed a full batch of expired records", removed: 1_000 },
     ]);
+  });
+
+  it("doesn't keep the process running", () => {
+    const timers = () => process.getActiveResourcesInfo().filter((name) => name === "Timeout");
+    const before = timers().length;
+
+    using _removal = scheduleRemoval({
+      batchSize: 10,
+      database: { removeExpired: () => 0 },
+      intervalMs: 60_000,
+      log: () => undefined,
+    });
+
+    assert.equal(timers().length, before);
   });
 
   it("stops when disposed", (context) => {

@@ -19,7 +19,8 @@
     "start": "node src/bin/main.ts",
     "test": "node --test --experimental-test-coverage --test-coverage-include='src/**/*.ts' --test-coverage-include-all --test-coverage-exclude='src/**/*.test.ts' --test-coverage-exclude='src/bin/**' --test-coverage-exclude='src/test-support/**' --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 'src/**/*.test.ts'",
     "typecheck": "tsc",
-    "workflows:audit": "zizmor --offline ."
+    "workflows:audit": "zizmor --offline .",
+    "test:mutation": "stryker run"
   },
   "dependencies": {
     "koa": "3.3.0",
@@ -29,6 +30,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.8",
+    "@stryker-mutator/core": "10.1.1",
+    "@stryker-mutator/tap-runner": "10.1.1",
     "@types/koa": "3.0.3",
     "@types/node": "26.6.6",
     "@types/oidc-provider": "9.13.1",

@@ -157,6 +157,8 @@ function retireSigningKeys(
   const [active, ...rest] = keys;
   const old = rest.filter((key) => key.promotedAt !== null);
   // The key file's format guarantees the first key has started signing.
+  // Stryker disable next-line ConditionalExpression: if active is missing or not signing, the
+  // format leaves no old keys either, so the second check returns too.
   if (typeof active?.promotedAt !== "string" || old.length === 0) {
     return { changes: [], keys, waiting: [] };
   }
@@ -179,6 +181,8 @@ function retireCookieKeys(
   options: StepOptions,
 ): Retired<CookieKeyEntry> {
   const [newest, ...old] = keys;
+  // Stryker disable next-line ConditionalExpression: with no newest key there are no old ones,
+  // so the second check returns too.
   if (newest === undefined || old.length === 0) {
     return { changes: [], keys, waiting: [] };
   }
@@ -202,6 +206,7 @@ export function revoke(file: KeyFile, options: Pick<StepOptions, "now">): StepRe
       changes: [
         ...file.signingKeys.map((key) => `Removed signing key ${key.jwk.kid}.`),
         `Removed ${count(file.cookieKeys.length, "cookie key")}.`,
+        // Stryker disable next-line OptionalChaining: a new key file always has a signing key.
         `Signing key ${replaced.signingKeys[0]?.jwk.kid} and a new cookie key are in use from the next start.`,
       ],
       file: replaced,

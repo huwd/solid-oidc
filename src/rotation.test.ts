@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -62,6 +63,36 @@ describe("rotating keys", () => {
     assert.equal(await checkSignature(harness.issuer, tokens.access_token), "unpublished key");
     assert.equal(kidOf((await logInAgain(harness)).access_token), added);
     assert.ok((await refresh(harness, refreshed, keyPair)).access_token);
+  });
+
+  it("signs cookies with the newest cookie key", async () => {
+    const dataDir = join(root, "signing");
+    const keys = new KeyDirectory(dataDir);
+    await using harness = await startHarness({
+      databasePath: join(dataDir, databaseFileName),
+      keys: await keys.load(),
+    });
+    await keys.run("rotate");
+    const rotated = await keys.load();
+    harness.restartBroker({ keys: rotated });
+
+    const login = await appLogin(harness);
+    const response = await fetch(login.authorizationUrl, { redirect: "manual" });
+    await response.body?.cancel();
+
+    const cookies = new Map(
+      response.headers.getSetCookie().map((line) => {
+        const [pair = ""] = line.split(";");
+        const separator = pair.indexOf("=");
+        return [pair.slice(0, separator), pair.slice(separator + 1)] as const;
+      }),
+    );
+    const value = cookies.get("_interaction");
+    assert.ok(value, `expected an interaction cookie, got ${[...cookies.keys()].join(", ")}`);
+    const expected = createHmac("sha1", rotated.cookieKeys[0] ?? "")
+      .update(`_interaction=${value}`)
+      .digest("base64url");
+    assert.equal(cookies.get("_interaction.sig"), expected);
   });
 
   it("keeps a session whose cookie was signed by an older cookie key", async () => {

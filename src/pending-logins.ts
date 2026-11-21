@@ -28,29 +28,21 @@ type Entry = { readonly checks: LoginChecks; readonly expiresAt: number };
  */
 export function createPendingLogins(options: CreatePendingLoginsOptions): PendingLogins {
   // A Map iterates in insertion order, so its first key is the oldest login.
+  // Every login waits as long as the others, so the oldest also expires
+  // first, and dropping it when full is all the clearing the store needs.
   const entries = new Map<string, Entry>();
-
-  function removeExpired(now: number): void {
-    for (const [uid, entry] of entries) {
-      if (entry.expiresAt > now) {
-        return;
-      }
-      entries.delete(uid);
-    }
-  }
 
   return {
     put(uid, checks) {
-      const now = options.now();
-      removeExpired(now);
+      // Starting again moves the login to the back, as the newest.
       entries.delete(uid);
       if (entries.size >= options.entriesMax) {
-        const oldest = entries.keys().next();
-        if (!oldest.done) {
-          entries.delete(oldest.value);
+        for (const oldest of entries.keys()) {
+          entries.delete(oldest);
+          break;
         }
       }
-      entries.set(uid, { checks, expiresAt: now + options.ttlMs });
+      entries.set(uid, { checks, expiresAt: options.now() + options.ttlMs });
     },
 
     take(uid) {
