@@ -55,6 +55,8 @@ export function solidConfiguration(options: SolidConfigurationOptions) {
   ]);
 
   return {
+    // Stryker disable next-line ArrayDeclaration,StringLiteral: oidc-provider always includes sub,
+    // so tests can't tell openid's claims from empty. The webid claim is checked.
     claims: { openid: ["sub"], webid: ["webid"] },
     clientDefaults: {
       // Solid servers accept only DPoP-bound access tokens, so a client
@@ -69,6 +71,8 @@ export function solidConfiguration(options: SolidConfigurationOptions) {
       _context: KoaContextWithOIDC,
       token: { readonly kind: string; readonly accountId?: string },
     ) =>
+      // Stryker disable next-line ConditionalExpression,LogicalOperator: only access tokens in JWT
+      // format reach here, and every one has an account, as client credentials are turned off.
       token.kind === "AccessToken" && token.accountId !== undefined
         ? { webid: token.accountId }
         : undefined,
@@ -82,6 +86,8 @@ export function solidConfiguration(options: SolidConfigurationOptions) {
         cacheDuration: clientDocumentCacheSeconds,
         enabled: true,
       },
+      // Stryker disable next-line ObjectLiteral: oidc-provider's default, so tests can't tell it
+      // from unset. The DPoP tests check it's on.
       dPoP: { enabled: true },
       resourceIndicators: {
         defaultResource: () => solidResource,
@@ -105,8 +111,19 @@ export function solidConfiguration(options: SolidConfigurationOptions) {
       allowLoopback: options.allowLoopbackClientIds,
       fetch: options.fetch,
     }),
+    // Stryker disable next-line ObjectLiteral: the same as oidc-provider's default, so tests can't
+    // tell it from unset. The test of an oversized document checks the limit holds.
     fetchResponseBodyLimits: { "client_id metadata document": clientDocumentBytesMax },
-    scopes: ["openid", "offline_access", "webid"],
+    scopes: [
+      // Stryker disable next-line StringLiteral: oidc-provider's default, so tests can't tell it
+      // from unset.
+      "openid",
+      // Stryker disable next-line StringLiteral: as above.
+      "offline_access",
+      // Stryker disable next-line StringLiteral: claims declares webid too, which oidc-provider
+      // also offers as a scope. Discovery's test checks webid is offered.
+      "webid",
+    ],
   } satisfies Configuration;
 }
 

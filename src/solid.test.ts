@@ -63,7 +63,8 @@ describe("discovery", () => {
     const response = await fetch(`${harness.issuer}/.well-known/openid-configuration`);
     const discovery = (await response.json()) as Record<string, unknown>;
 
-    assert.equal(discovery["solid_oidc_supported"], solidOidcSupported);
+    assert.equal(discovery["solid_oidc_supported"], "https://solidproject.org/TR/solid-oidc");
+    assert.equal(solidOidcSupported, discovery["solid_oidc_supported"]);
     assert.ok((discovery["scopes_supported"] as string[]).includes("webid"));
     assert.ok((discovery["claims_supported"] as string[]).includes("webid"));
     assert.ok(Array.isArray(discovery["dpop_signing_alg_values_supported"]));
@@ -127,6 +128,10 @@ describe("tokens for a Solid app", () => {
     const visit = await visitUntilPage(harness, login.authorizationUrl);
 
     assert.equal(visit.url.searchParams.get("error"), "invalid_target");
+    assert.equal(
+      visit.url.searchParams.get("error_description"),
+      "the broker issues tokens only for Solid",
+    );
   });
 });
 
