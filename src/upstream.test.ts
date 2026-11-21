@@ -14,17 +14,21 @@ async function closedPort(): Promise<number> {
 
 describe("createUpstreamClient", () => {
   it("reports an upstream provider that can't be reached over HTTPS", async () => {
+    const port = await closedPort();
     const upstream = createUpstreamClient({
       clientId: "broker",
       clientSecret: "secret",
-      issuer: `https://127.0.0.1:${await closedPort()}`,
+      issuer: `https://127.0.0.1:${port}`,
       redirectUri: "https://id.example.test/upstream/callback",
     });
 
     const result = await upstream.authorizationUrl(newLoginChecks());
 
     assert.ok(!result.ok, "expected discovery to fail");
-    assert.match(result.errors[0] ?? "", /^upstream discovery failed \(/);
+    // An error with no code is named by its type, with its cause's message.
+    assert.deepEqual(result.errors, [
+      `upstream discovery failed (TypeError: connect ECONNREFUSED 127.0.0.1:${port})`,
+    ]);
   });
 
   it("tries discovery again after it fails", async () => {
