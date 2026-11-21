@@ -43,14 +43,14 @@ Follow [`docs/development-secrets.md`](docs/development-secrets.md). In short:
 - Work on a branch. Commit as you go, push the branch, and open a draft pull request, without asking. Never push to `main`, force-push, mark a pull request ready or merge one: those are the maintainer's.
 - `PLAN.md` is a local planning note, excluded through `.git/info/exclude`. Do not commit it.
 - Every commit that reaches `main` is signed through the maintainer's Bitwarden SSH agent and carries their `Signed-off-by` line, which certifies the change is theirs to contribute. An agent never adds either. Commit with `git -c commit.gpgsign=false commit -F <message file>`, without `-s`, and check each commit passes `pnpm run check` on its own.
-- When a branch is ready for review, the maintainer runs [`scripts/sign-off.sh`](scripts/sign-off.sh) with `!`. It signs off and signs the commits that lack a sign-off, approving each in Bitwarden, merges `main` if the branch is behind, pushes, and marks the pull request ready. Tell the maintainer when to run it, and keep the pull request's description current with `gh pr edit --body-file` before then.
+- When a branch is ready for review, the maintainer runs `git sign-off` with `!`, which their [laptop configuration](https://huwd.github.io/declarative_laptop/decisions/0022-sign-off-agent-commits-with-git-sign-off/) installs. It signs off and signs the commits that lack a sign-off, approving each in Bitwarden, merges `main` if the branch is behind, pushes, and marks the pull request ready. Tell the maintainer when to run it, and keep the pull request's description current with `gh pr edit --body-file` before then.
 - Write commit subjects as [Conventional Commits](https://www.conventionalcommits.org/), such as `fix(test): detect a lost session after restart`, of at most 50 characters. Commits before November 2026 used plain imperative subjects.
 - Attribute AI help with trailers, in this order, following the [laptop repository's record 0016](https://huwd.github.io/declarative_laptop/decisions/0016-ai-attribution-trailers/):
 
   ```text
   Generated-by: Claude Code:<model-id>
   Co-Authored-By: <model name> <noreply@anthropic.com>
-  Signed-off-by: (added by scripts/sign-off.sh)
+  Signed-off-by: (added by git sign-off)
   ```
 
   Use `Generated-by` when the agent produced most of the change from prompts, and `Assisted-by` when the maintainer did most of the work. Say which you chose when committing.

@@ -23,8 +23,8 @@
       "Bash(git push origin main*)",
       "Bash(gh pr ready*)",
       "Bash(gh pr merge*)",
-      "Bash(scripts/sign-off.sh*)",
-      "Bash(bash scripts/sign-off.sh*)"
+      "Bash(git sign-off*)",
+      "Bash(git-sign-off*)"
     ]
   }
 }
