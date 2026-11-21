@@ -1,8 +1,8 @@
 # 0012. Check the tests with StrykerJS mutation testing, gated on changed lines
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Decided by:** @huwd
-- **Decided:** (when accepted)
+- **Decided:** 2026-11-21
 - **Recorded:** 2026-11-21
 - **Discussion:** [#22](https://github.com/huwd/solid-oidc/issues/22), [#25](https://github.com/huwd/solid-oidc/issues/25)
 

@@ -63,4 +63,4 @@ Editorial improvements, such as clearer wording, typo corrections and link fixes
 | [0009](0009-loopback-client-ids-for-development.md) | Allow loopback Client ID Documents only behind a development setting | Accepted |
 | [0010](0010-test-against-real-implementations.md) | Test against real protocol implementations, not scripted stubs | Accepted |
 | [0011](0011-key-rotation.md) | Rotate keys in timed steps, and revoke them separately | Accepted |
-| [0012](0012-mutation-testing.md) | Check the tests with StrykerJS mutation testing, gated on changed lines | Proposed |
+| [0012](0012-mutation-testing.md) | Check the tests with StrykerJS mutation testing, gated on changed lines | Accepted |
