@@ -1,8 +1,8 @@
 # 0013. Mutate every configured module when a pull request changes tests
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Decided by:** @huwd
-- **Decided:** (when accepted)
+- **Decided:** 2026-11-22
 - **Recorded:** 2026-11-22
 - **Discussion:** [#22](https://github.com/huwd/solid-oidc/issues/22), following [decision 0012](0012-mutation-testing.md)
 
