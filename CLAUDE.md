@@ -40,17 +40,18 @@ Follow [`docs/development-secrets.md`](docs/development-secrets.md). In short:
 ## Git
 
 - `main` is protected by the ruleset in [`.github/rulesets/protect_main.json`](.github/rulesets/protect_main.json): changes go through pull requests that are up to date with `main` and pass the CI and Verify pins checks. Merge with a merge commit, so the branch's signed commits survive; squash and rebase merging are turned off. Force pushes and deleting `main` are blocked. Change the ruleset by editing that file in a pull request, then apply it as [its README](.github/rulesets/README.md) describes.
-- Work on a branch, push it, and open a pull request. Ask before pushing or opening one.
+- Work on a branch. Commit as you go, push the branch, and open a draft pull request, without asking. Never push to `main`, force-push, mark a pull request ready or merge one: those are the maintainer's.
 - `PLAN.md` is a local planning note, excluded through `.git/info/exclude`. Do not commit it.
-- Commits are signed through the Bitwarden SSH agent and carry a `Signed-off-by` line from the maintainer. Only the maintainer signs off, so an agent never adds that line, whether by hand or with `git commit -s`. Prepare and check the changes and message for each commit, then give the maintainer the `git commit -s` command, or a script for a series, to run with `!`.
+- Every commit that reaches `main` is signed through the maintainer's Bitwarden SSH agent and carries their `Signed-off-by` line, which certifies the change is theirs to contribute. An agent never adds either. Commit with `git -c commit.gpgsign=false commit -F <message file>`, without `-s`, and check each commit passes `pnpm run check` on its own.
+- When a branch is ready for review, the maintainer runs `git sign-off` with `!`, which their [laptop configuration](https://huwd.github.io/declarative_laptop/decisions/0022-sign-off-agent-commits-with-git-sign-off/) installs. It signs off and signs the commits that lack a sign-off, approving each in Bitwarden, merges `main` if the branch is behind, pushes, and marks the pull request ready. Tell the maintainer when to run it, and keep the pull request's description current with `gh pr edit --body-file` before then.
 - Write commit subjects as [Conventional Commits](https://www.conventionalcommits.org/), such as `fix(test): detect a lost session after restart`, of at most 50 characters. Commits before November 2026 used plain imperative subjects.
 - Attribute AI help with trailers, in this order, following the [laptop repository's record 0016](https://huwd.github.io/declarative_laptop/decisions/0016-ai-attribution-trailers/):
 
   ```text
   Generated-by: Claude Code:<model-id>
   Co-Authored-By: <model name> <noreply@anthropic.com>
-  Signed-off-by: (added by the maintainer's git commit -s)
+  Signed-off-by: (added by git sign-off)
   ```
 
-  Use `Generated-by` when the agent produced most of the change from prompts, and `Assisted-by` when the maintainer did most of the work. Say which you chose when preparing a commit.
+  Use `Generated-by` when the agent produced most of the change from prompts, and `Assisted-by` when the maintainer did most of the work. Say which you chose when committing.
 - CI workflows stay read-only. Only the release job may write, and only to packages. Run `gh actions-lock` after changing any `uses:` line.
