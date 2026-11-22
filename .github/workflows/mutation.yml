@@ -1,11 +1,14 @@
-# Mutation testing, as described in docs/testing.md.
+# Mutation testing, as described in docs/testing.md and decisions 0012 and
+# 0013.
 #
-# On a pull request, Stryker mutates only the broker source lines the pull
-# request changed, and fails if a test misses any mutant. A pull request
-# that changes no broker source passes at once, so the job can be required.
+# On a pull request, .github/scripts/mutation-scope.sh chooses what to mutate:
+# the changed lines of broker source, the whole module of a changed unit test,
+# and every configured module when an integration test, a test helper or the
+# Stryker configuration changes. The check fails if a test misses any mutant.
+# A pull request that changes neither source nor tests passes at once, so the
+# job can be required.
 #
 # Every week, and on demand, it mutates every module in stryker.config.json.
-# This catches a weakened test, which a pull request's own lines can't show.
 
 name: Mutation testing
 
@@ -44,19 +47,20 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
-        run: echo "ranges=$(.github/scripts/mutation-ranges.sh "$BASE")" >> "$GITHUB_OUTPUT"
+        run: echo "mutate=$(.github/scripts/mutation-scope.sh "$BASE")" >> "$GITHUB_OUTPUT"
       - name: Mutate
         env:
           EVENT: ${{ github.event_name }}
-          RANGES: ${{ steps.scope.outputs.ranges }}
+          MUTATE: ${{ steps.scope.outputs.mutate }}
         run: |
-          if [ "$EVENT" = pull_request ] && [ -z "$RANGES" ]; then
-            echo "This pull request changes no broker source, so there is nothing to mutate." | tee -a "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
           args=()
-          if [ -n "$RANGES" ]; then
-            args=(--mutate "$RANGES")
+          if [ "$EVENT" = pull_request ]; then
+            if [ -z "$MUTATE" ]; then
+              echo "This pull request changes no broker source or tests, so there is nothing to mutate." | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            args=(--mutate "$MUTATE")
+            echo "Mutating: ${MUTATE//,/, }" | tee -a "$GITHUB_STEP_SUMMARY"
           fi
           set -o pipefail
           status=0

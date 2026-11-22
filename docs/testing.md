@@ -99,7 +99,13 @@ The entry points in `src/bin/` are left out of coverage, because they need real 
 
 Mutation testing checks that the tests would fail if the code were wrong. StrykerJS makes small changes to the code, called mutants, such as flipping a comparison or removing a call, and runs the tests that cover each one. A mutant that no test fails on has survived. [Decision 0012](decisions/0012-mutation-testing.md) explains the choice.
 
-The Mutation testing check runs on every pull request. It mutates only the broker source lines the pull request changed, and fails if any mutant survives. Every week it also mutates every module listed in `stryker.config.json`.
+The Mutation testing check runs on every pull request, and fails if any mutant survives. It mutates:
+
+- the broker source lines the pull request changed
+- the whole module of each changed unit test, such as `src/keys.ts` for `src/keys.test.ts`, when that module is listed in `stryker.config.json`
+- every listed module, when the pull request changes an integration test, which has no module of the same name, a helper in `src/test-support/`, or `stryker.config.json`
+
+A weakened test can let mutants survive in code the pull request didn't touch, so changed tests are checked too. [Decision 0013](decisions/0013-mutate-modules-changed-tests-protect.md) explains the rules. Every week, the check also mutates every listed module.
 
 Run every module locally with:
 
