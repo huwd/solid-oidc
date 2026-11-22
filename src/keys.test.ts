@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { chmod, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -41,7 +42,8 @@ describe("generateProviderKeys", () => {
     assert.ok(signingKey, "expected a signing key");
     assert.equal(signingKey.alg, "ES256");
     assert.equal(signingKey.use, "sig");
-    assert.match(signingKey.kid, /^[A-Za-z0-9_-]{43}$/);
+    const members = `{"crv":"P-256","kty":"EC","x":"${signingKey.x}","y":"${signingKey.y}"}`;
+    assert.equal(signingKey.kid, createHash("sha256").update(members).digest("base64url"));
     assert.equal(keys.cookieKeys.length, 1);
   });
 
@@ -146,6 +148,42 @@ describe("loadOrCreateKeys", () => {
 
     assert.ok(!result.ok, "expected an unknown version to be refused");
     assert.match(result.errors[0] ?? "", new RegExp(`^DATA_DIR: ${path}: version: `));
+  });
+
+  for (const [name, contents] of [
+    ["a number", "5"],
+    ["null", "null"],
+    ["a string", '"keys"'],
+  ] as const) {
+    it(`refuses a key file holding ${name}, not an object`, async () => {
+      const dataDir = freshDataDir();
+      const path = await writeKeysFile({ dataDir, contents });
+
+      const result = await loadOrCreateKeys({ dataDir, now: Date.now });
+
+      assert.ok(!result.ok, "expected the file to be refused");
+      assert.match(result.errors[0] ?? "", new RegExp(`^DATA_DIR: ${path}: `));
+    });
+  }
+
+  it("refuses a key ID with a character that isn't base64url at the end", async () => {
+    const dataDir = freshDataDir();
+    const file = newKeyFile(Date.now());
+    const [entry] = file.signingKeys;
+    assert.ok(entry, "expected a signing key");
+    await writeKeysFile({
+      dataDir,
+      contents: JSON.stringify({
+        ...file,
+        signingKeys: [{ ...entry, jwk: { ...entry.jwk, kid: `${entry.jwk.kid}!` } }],
+        version: 2,
+      }),
+    });
+
+    const result = await loadOrCreateKeys({ dataDir, now: Date.now });
+
+    assert.ok(!result.ok, "expected the key ID to be refused");
+    assert.match(result.errors[0] ?? "", /signingKeys\.0\.jwk\.kid: must be base64url/);
   });
 
   it("refuses a signing key that is not a private ES256 key", async () => {
@@ -264,6 +302,25 @@ describe("loadOrCreateKeys", () => {
     assert.deepEqual(loaded.value, keys);
     assert.deepEqual(file.value.cookieKeys[0]?.addedAt, written);
     assert.deepEqual(file.value.signingKeys[0]?.promotedAt, written);
+  });
+
+  it("reads every signing key in a file from before key rotation", async () => {
+    const dataDir = freshDataDir();
+    const keys = generateProviderKeys();
+    const older = generateProviderKeys().signingKeys;
+    await writeKeysFile({
+      dataDir,
+      contents: JSON.stringify({
+        ...keys,
+        signingKeys: [...keys.signingKeys, ...older],
+        version: 1,
+      }),
+    });
+
+    const loaded = await loadOrCreateKeys({ dataDir, now: Date.now });
+
+    assert.ok(loaded.ok, `expected two signing keys to be read: ${JSON.stringify(loaded)}`);
+    assert.equal(loaded.value.signingKeys.length, 2);
   });
 });
 

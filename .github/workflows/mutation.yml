@@ -1,0 +1,73 @@
+# Mutation testing, as described in docs/testing.md.
+#
+# On a pull request, Stryker mutates only the broker source lines the pull
+# request changed, and fails if a test misses any mutant. A pull request
+# that changes no broker source passes at once, so the job can be required.
+#
+# Every week, and on demand, it mutates every module in stryker.config.json.
+# This catches a weakened test, which a pull request's own lines can't show.
+
+name: Mutation testing
+
+on:
+  pull_request:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  mutation:
+    name: Mutation testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+          # The pull request's base commit, to find the changed lines.
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6.1.1
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Choose what to mutate
+        id: scope
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: echo "ranges=$(.github/scripts/mutation-ranges.sh "$BASE")" >> "$GITHUB_OUTPUT"
+      - name: Mutate
+        env:
+          EVENT: ${{ github.event_name }}
+          RANGES: ${{ steps.scope.outputs.ranges }}
+        run: |
+          if [ "$EVENT" = pull_request ] && [ -z "$RANGES" ]; then
+            echo "This pull request changes no broker source, so there is nothing to mutate." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          args=()
+          if [ -n "$RANGES" ]; then
+            args=(--mutate "$RANGES")
+          fi
+          set -o pipefail
+          status=0
+          pnpm exec stryker run --reporters clear-text "${args[@]}" 2>&1 | tee stryker.log || status=$?
+          {
+            echo '## Mutation testing'
+            echo
+            echo 'Each survivor needs a test that kills it, or a Stryker disable comment giving the reason it is equivalent.'
+            echo
+            echo '```text'
+            grep -v ' INFO ' stryker.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"

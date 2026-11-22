@@ -48,6 +48,8 @@ const WebId = z.url().superRefine((value, context) => {
     return;
   }
   for (const problem of transportProblems(new URL(value))) {
+    // Stryker disable next-line StringLiteral: zod reports the issue with any code, and only the
+    // message reaches the person reading the error.
     context.addIssue({ code: "custom", message: problem });
   }
 });

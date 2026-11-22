@@ -63,6 +63,8 @@ export function createUpstreamClient(options: CreateUpstreamClientOptions): Upst
         undefined,
         // The configuration accepts plain HTTP only for a loopback address,
         // which is how the tests run their own upstream provider.
+        // Stryker disable next-line ArrayDeclaration: openid-client applies these only after
+        // discovery succeeds, and no test has a reachable HTTPS upstream.
         { execute: isHttp(options.issuer) ? [client.allowInsecureRequests] : [] },
       )
       .catch((error: unknown) => {
@@ -97,6 +99,8 @@ export function createUpstreamClient(options: CreateUpstreamClientOptions): Upst
         const tokens = await client.authorizationCodeGrant(await discover(), callbackUrl, {
           expectedNonce: checks.nonce,
           expectedState: checks.state,
+          // Stryker disable next-line BooleanLiteral: the check below refuses a login without an
+          // ID token too.
           idTokenExpected: true,
           pkceCodeVerifier: checks.codeVerifier,
         });
@@ -104,11 +108,13 @@ export function createUpstreamClient(options: CreateUpstreamClientOptions): Upst
       } catch (error) {
         return { ok: false, errors: [`upstream login failed (${failureCode(error)})`] };
       }
-      /* node:coverage ignore next 4 */
+      /* node:coverage ignore next 6 */
       // Unreachable: idTokenExpected makes the grant fail without an ID token.
+      // Stryker disable all: unreachable, as above.
       if (claims === undefined) {
         return { ok: false, errors: ["upstream login failed (no ID token)"] };
       }
+      // Stryker restore all
       return { ok: true, value: { issuer: claims.iss, subject: claims.sub } };
     },
   };
@@ -119,13 +125,15 @@ export function createUpstreamClient(options: CreateUpstreamClientOptions): Upst
 // the upstream's OAuth error, such as access_denied. None of them repeats a
 // token, a code or a secret, so all are safe to log.
 function failureCode(error: unknown): string {
-  /* node:coverage ignore next 4 */
+  /* node:coverage ignore next 6 */
   // Unreachable: openid-client throws only Error instances.
+  // Stryker disable all: unreachable, as above.
   if (!(error instanceof Error)) {
     return "unknown error";
   }
-  const oauthError = "error" in error && typeof error.error === "string" ? error.error : undefined;
-  const code = "code" in error && typeof error.code === "string" ? error.code : error.name;
+  // Stryker restore all
+  const oauthError = stringProperty(error, "error");
+  const code = stringProperty(error, "code") ?? error.name;
   // The wrapped error's message is the specific one, such as which parameter
   // failed. Its own cause holds the response's values, so it is left out.
   const reason = error.cause instanceof Error ? error.cause.message : error.message;
@@ -133,6 +141,15 @@ function failureCode(error: unknown): string {
   return `${code}: ${detail}`;
 }
 
+function stringProperty(error: Error, name: "code" | "error"): string | undefined {
+  const value: unknown = Reflect.get(error, name);
+  // Stryker disable next-line ConditionalExpression: openid-client sets these properties only
+  // to strings, so tests can't tell keeping any value from keeping only strings.
+  return typeof value === "string" ? value : undefined;
+}
+
 function isHttp(url: string): boolean {
+  // Stryker disable next-line ConditionalExpression: allowing plain HTTP changes nothing for an
+  // HTTPS issuer, so tests can't tell. The HTTP tests check it's allowed where needed.
   return new URL(url).protocol === "http:";
 }

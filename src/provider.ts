@@ -52,6 +52,8 @@ export function createProvider(options: CreateProviderOptions): Provider {
     renderError,
     jwks: { keys: options.keys.signingKeys.map((key) => ({ ...key })) },
     // Set explicitly, because key rotation's waits depend on them.
+    // Stryker disable next-line ObjectLiteral: each value is oidc-provider's default, so tests can't
+    // tell them from unset. Setting them stops an upgrade changing them under those waits.
     ttl: {
       AccessToken: tokenLifetimeSeconds,
       Grant: sessionLifetimeSeconds,
@@ -156,22 +158,24 @@ export function mountProvider(options: {
     const { originalUrl } = context;
     // oidc-provider works out its mount path from originalUrl.
     Object.assign(request, { originalUrl });
-    // What follows the prefix may be empty or start with a query string, and
-    // the provider needs a path that starts with a slash either way.
-    const rest = originalUrl.slice(prefix.length);
-    request.url = rest.startsWith("/") ? rest : `/${rest}`;
+    // scopeToIssuer only lets through paths under the prefix, so what follows
+    // it starts with a slash, as the provider needs.
+    request.url = originalUrl.slice(prefix.length);
 
+    // Stryker disable next-line BooleanLiteral: the wait for close below means Koa finds the
+    // response already ended, and writes nothing, either way.
     context.respond = false;
+    // Stryker disable next-line StringLiteral: no middleware runs after this one, so nothing
+    // observes how long it waits. Waiting keeps the request open in Koa until it has ended.
     const closed = once(context.res, "close");
     await handle(request, context.res);
     await closed;
   };
 }
 
+// The issuer's own path, such as /solid, is not under it: the provider has
+// nothing there. An issuer at the root has the prefix "", and every path
+// starts with a slash.
 function isUnder(options: { readonly path: string; readonly prefix: string }): boolean {
-  return (
-    options.prefix === "" ||
-    options.path === options.prefix ||
-    options.path.startsWith(`${options.prefix}/`)
-  );
+  return options.path.startsWith(`${options.prefix}/`);
 }

@@ -22,6 +22,7 @@ Koa
 (?i)lockfiles?
 Mockoon
 (?i)loopback
+(?i)mutators?
 (?i)namespaces?
 (?i)nonces?
 npm
@@ -35,11 +36,14 @@ pnpm('s)?
 Ryzen
 shellcheck
 (?i)stateful
+Stryker
+StrykerJS
 Synology
 (?i)tmpfs
 (?i)toolchains?
 (?i)transpilers?
 tsc
+tsconfig
 (?i)unhandled
 URIs?
 (?i)userland

@@ -12,6 +12,8 @@ pnpm run test
 
 Coverage must stay at 100% for lines, branches and functions, or the command fails. The [style guide](code-style.md#tests) covers how to write each test.
 
+Coverage shows that code ran, not that a test would notice it being wrong. [Mutation testing](#mutation-testing) checks that.
+
 ## Layers
 
 | Layer | Runs | Upstream provider | Solid side |
@@ -92,3 +94,41 @@ Don't intercept Node's `http` module or `fetch`, for example with `nock`. The st
 A `/* node:coverage ignore next N */` comment is allowed only for code that can't run, with a comment saying why on the next line. Examples are a check that a library already guarantees, or a file system that lacks hard links. Prefer restructuring the code so the branch disappears.
 
 The entry points in `src/bin/` are left out of coverage, because they need real process signals and exit codes. Keep logic out of them.
+
+## Mutation testing
+
+Mutation testing checks that the tests would fail if the code were wrong. StrykerJS makes small changes to the code, called mutants, such as flipping a comparison or removing a call, and runs the tests that cover each one. A mutant that no test fails on has survived. [Decision 0012](decisions/0012-mutation-testing.md) explains the choice.
+
+The Mutation testing check runs on every pull request. It mutates only the broker source lines the pull request changed, and fails if any mutant survives. Every week it also mutates every module listed in `stryker.config.json`.
+
+Run every module locally with:
+
+```sh
+pnpm run test:mutation
+```
+
+This takes about two minutes. To check one module, or some of its lines, as the pull request check does, name them:
+
+```sh
+pnpm exec stryker run --mutate src/keys.ts
+pnpm exec stryker run --mutate src/keys.ts:120-140
+```
+
+Stryker prints each surviving mutant, with the change it made. Its full report is in `reports/mutation/mutation.json`.
+
+### Dealing with a surviving mutant
+
+Kill it, if you can, with a test that fails on the changed code. A survivor usually means a test checks that something happened but not what, such as a status code without the page's message or headers.
+
+Sometimes no test could ever tell the mutant from the original. Examples are a setting equal to the library's default, or a check that another check already makes. Simplify the code if the mutant shows a line does nothing. Otherwise record it on the line before, naming the mutator and giving the reason:
+
+```ts
+// Stryker disable next-line OptionalChaining: PRAGMA user_version always returns a row.
+return Number(row?.["user_version"]);
+```
+
+For a block, put `// Stryker disable all: <reason>` before it and `// Stryker restore all` after it. A comment just before `} else if` applies to the previous block, so put it inside the condition instead. Don't leave mutators or files out in `stryker.config.json` to hide survivors.
+
+The break threshold is 100, so every mutant must be killed or recorded. Mutants that crash a test file as it loads, such as broken key generation, show as errors. They are detected, and don't count against the score.
+
+Stryker can't yet use its TypeScript checker with TypeScript 7, so some mutants that wouldn't compile still run. If one survives only because types are stripped, record it as above. [#25](https://github.com/huwd/solid-oidc/issues/25) tracks the fix.

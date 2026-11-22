@@ -89,6 +89,9 @@ const KeysFileVersion1 = z.strictObject({
   version: z.literal(1),
 });
 
+// Only the version, to choose which schema checks the rest.
+const KeysFileVersionOf1 = z.object({ version: z.literal(1) });
+
 const KeysFileVersion2 = z.strictObject({
   cookieKeys: z
     .array(z.strictObject({ addedAt: Timestamp, key: CookieKey }))
@@ -104,7 +107,11 @@ const KeysFileVersion2 = z.strictObject({
     )
     .min(1)
     .max(keysMax)
-    .refine((keys) => keys[0]?.promotedAt !== null, "the first key must have started signing")
+    .refine(
+      // Stryker disable next-line OptionalChaining: zod runs this only once min(1) has passed.
+      (keys) => keys[0]?.promotedAt !== null,
+      "the first key must have started signing",
+    )
     .refine(
       (keys) => keys.slice(0, -1).every((key) => key.promotedAt !== null),
       "only the last key may be waiting to start signing",
@@ -161,8 +168,8 @@ async function loadOrCreateKeyFile(options: {
 }): Promise<Result<KeyFile>> {
   const path = join(options.dataDir, keysFileName);
   const existing = await readKeysFile(path);
-  if (existing.kind === "found") {
-    return existing.result;
+  if (existing !== undefined) {
+    return existing;
   }
 
   const file = newKeyFile(options.now());
@@ -173,17 +180,21 @@ async function loadOrCreateKeyFile(options: {
   } catch (error) {
     return { ok: false, errors: [`DATA_DIR: could not create ${path} (${errorCode(error)})`] };
   }
+  // Stryker disable next-line ConditionalExpression,BlockStatement: reading the file back, as
+  // after a race, finds the same keys.
   if (created) {
     return { ok: true, value: file };
   }
   // Another process created the file first. Use its keys, so both agree.
   const raced = await readKeysFile(path);
-  /* node:coverage ignore next 4 */
+  /* node:coverage ignore next 6 */
   // Unreachable: the file existed a moment ago when the link failed.
-  if (raced.kind === "missing") {
+  // Stryker disable all: unreachable, as above.
+  if (raced === undefined) {
     return { ok: false, errors: [`DATA_DIR: ${path} disappeared while starting`] };
   }
-  return raced.result;
+  // Stryker restore all
+  return raced;
 }
 
 /**
@@ -193,13 +204,13 @@ async function loadOrCreateKeyFile(options: {
 export async function readKeyFile(dataDir: string): Promise<Result<KeyFile>> {
   const path = join(dataDir, keysFileName);
   const read = await readKeysFile(path);
-  if (read.kind === "missing") {
+  if (read === undefined) {
     return {
       ok: false,
       errors: [`DATA_DIR: ${path} does not exist. Start the broker once to create it.`],
     };
   }
-  return read.result;
+  return read;
 }
 
 /**
@@ -211,6 +222,8 @@ export async function replaceKeyFile(dataDir: string, file: KeyFile): Promise<Re
   const path = join(dataDir, keysFileName);
   const temporaryPath = temporaryPathFor(path);
   try {
+    // Stryker disable next-line StringLiteral: the temporary name is random, so it never exists,
+    // and refusing to overwrite one is only a precaution.
     await writeFile(temporaryPath, serialise(file), { flag: "wx", mode: keysFileMode });
     await rename(temporaryPath, path);
   } catch (error) {
@@ -220,29 +233,29 @@ export async function replaceKeyFile(dataDir: string, file: KeyFile): Promise<Re
   return { ok: true, value: undefined };
 }
 
-type ReadOutcome =
-  | { readonly kind: "found"; readonly result: Result<KeyFile> }
-  | { readonly kind: "missing" };
-
-async function readKeysFile(path: string): Promise<ReadOutcome> {
+/** Read and check the key file, or return undefined if there is none. */
+async function readKeysFile(path: string): Promise<Result<KeyFile> | undefined> {
   let text: string;
   let stats: { readonly mode: number; readonly mtimeMs: number };
   try {
+    // Stryker disable next-line ObjectLiteral,StringLiteral: JSON.parse reads a Buffer as UTF-8
+    // text too, so tests can't tell.
     [text, stats] = await Promise.all([readFile(path, { encoding: "utf8" }), stat(path)]);
   } catch (error) {
     const code = errorCode(error);
     if (code === "ENOENT") {
-      return { kind: "missing" };
+      return undefined;
     }
-    const errors = [`DATA_DIR: could not read ${path} (${code})`];
-    return { kind: "found", result: { ok: false, errors } };
+    return { ok: false, errors: [`DATA_DIR: could not read ${path} (${code})`] };
   }
 
   if ((stats.mode & groupAndOtherPermissions) !== 0) {
-    const errors = [`DATA_DIR: ${path} must be readable only by its owner (mode 600)`];
-    return { kind: "found", result: { ok: false, errors } };
+    return {
+      ok: false,
+      errors: [`DATA_DIR: ${path} must be readable only by its owner (mode 600)`],
+    };
   }
-  return { kind: "found", result: parseKeysFile({ modifiedAt: stats.mtimeMs, path, text }) };
+  return parseKeysFile({ modifiedAt: stats.mtimeMs, path, text });
 }
 
 function parseKeysFile(options: {
@@ -261,9 +274,7 @@ function parseKeysFile(options: {
   // A file from before key rotation has no dates. Treat its keys as added,
   // and in use, when the file was last written. Every wait is measured from
   // a newer key's date, so these dates only appear in the key command's list.
-  const isVersion1 =
-    typeof json === "object" && json !== null && "version" in json && json.version === 1;
-  if (isVersion1) {
+  if (KeysFileVersionOf1.safeParse(json).success) {
     const version1 = KeysFileVersion1.safeParse(json);
     if (!version1.success) {
       return { ok: false, errors: issuesIn(options.path, version1.error) };
@@ -301,18 +312,23 @@ async function createExclusively(options: {
   readonly path: string;
 }): Promise<boolean> {
   const temporaryPath = temporaryPathFor(options.path);
+  // Stryker disable next-line StringLiteral: as in replaceKeyFile.
   await writeFile(temporaryPath, options.contents, { flag: "wx", mode: keysFileMode });
 
+  // Stryker disable next-line BooleanLiteral: a false result only makes the caller read the file
+  // back, which holds the same keys.
   let linked = true;
   try {
     await link(temporaryPath, options.path);
   } catch (error) {
-    /* node:coverage ignore next 5 */
+    /* node:coverage ignore next 7 */
     // Platform-specific: only a file system without hard links fails this way.
+    // Stryker disable all: not reachable in tests, as above.
     if (errorCode(error) !== "EEXIST") {
       await unlink(temporaryPath);
       throw error;
     }
+    // Stryker restore all
     linked = false;
   }
 
@@ -332,11 +348,13 @@ function serialise(file: KeyFile): string {
 export function generateSigningKey(): SigningKey {
   const { privateKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
   const jwk = privateKey.export({ format: "jwk" });
-  /* node:coverage ignore next 4 */
+  /* node:coverage ignore next 6 */
   // Unreachable: Node always exports a P-256 private key with these members.
+  // Stryker disable all: unreachable, as above.
   if (jwk.d === undefined || jwk.x === undefined || jwk.y === undefined) {
     throw new Error("Node exported an incomplete P-256 key");
   }
+  // Stryker restore all
   return {
     alg: "ES256",
     crv: "P-256",

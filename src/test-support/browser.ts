@@ -21,6 +21,8 @@ export type VisitOptions = {
 
 export type Visit = {
   readonly body: string;
+  /** The headers of the last response. */
+  readonly headers: Headers;
   readonly status: number;
   /** The last URL fetched, or the redirect it stopped at. */
   readonly url: URL;
@@ -71,12 +73,17 @@ export function createBrowser(): Browser {
         store(url, response);
         const location = response.headers.get("location");
         if (location === null || response.status < 300 || response.status > 399) {
-          return { body: await response.text(), status: response.status, url };
+          return {
+            body: await response.text(),
+            headers: response.headers,
+            status: response.status,
+            url,
+          };
         }
         await response.body?.cancel();
         const next = (options.rewrite ?? ((same) => same))(new URL(location, url));
         if (options.stopAt?.(next) === true) {
-          return { body: "", status: response.status, url: next };
+          return { body: "", headers: response.headers, status: response.status, url: next };
         }
         url = next;
         method = "GET";

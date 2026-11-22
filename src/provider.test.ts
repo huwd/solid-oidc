@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import type Koa from "koa";
 
 import { createStaticAccountStore } from "./accounts.ts";
+import { pageHeaders } from "./pages.ts";
 import {
   accountFinder,
   interactionUrl,
@@ -151,6 +152,22 @@ describe("provider at an issuer with a path", () => {
     assert.equal(response.status, 404);
   });
 
+  // The provider is handed what follows the issuer's path, so a path outside
+  // it must be refused before that, or it could reach a provider route.
+  for (const path of [
+    "/abcdef/.well-known/openid-configuration",
+    "/solid.well-known/openid-configuration",
+  ]) {
+    it(`does not answer ${path}, outside the issuer's path, even though it ends like a provider route`, async () => {
+      await using server = await startBroker(issuer);
+
+      const response = await fetch(`http://127.0.0.1:${server.port}${path}`);
+      await response.body?.cancel();
+
+      assert.equal(response.status, 404);
+    });
+  }
+
   it("passes a query string on the issuer path to the provider intact", async () => {
     await using server = await startBroker(issuer);
 
@@ -214,6 +231,41 @@ describe("accountFinder", () => {
     const account = await findAccount(undefined as never, "https://mallory.example.test/#me");
 
     assert.equal(account, undefined);
+  });
+});
+
+describe("provider pages", () => {
+  const issuer = "https://id.example.test/solid";
+
+  it("shows an error it can't send back to the app on the broker's own page", async () => {
+    await using server = await startBroker(issuer);
+    const query = new URLSearchParams({
+      client_id: "https://app.example.test/id",
+      redirect_uri: "https://app.example.test/callback",
+      response_type: "code",
+      scope: "openid",
+    });
+
+    const response = await fetch(`http://127.0.0.1:${server.port}/solid/auth?${query}`);
+    const body = await response.text();
+
+    assert.equal(response.status, 400);
+    for (const [name, value] of Object.entries(pageHeaders)) {
+      assert.equal(response.headers.get(name), value, `expected the ${name} header`);
+    }
+    assert.ok(body.includes("The app&#39;s request was refused"), body);
+    assert.match(body, /\(invalid_client: [^)]+\)/);
+  });
+
+  it("has no development login pages, even at a path the broker's routes don't take", async () => {
+    await using server = await startBroker(issuer);
+
+    const response = await fetch(
+      `http://127.0.0.1:${server.port}/solid/interaction/${"a".repeat(65)}`,
+    );
+    await response.body?.cancel();
+
+    assert.equal(response.status, 404);
   });
 });
 
