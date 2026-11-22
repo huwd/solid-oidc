@@ -64,3 +64,4 @@ Editorial improvements, such as clearer wording, typo corrections and link fixes
 | [0010](0010-test-against-real-implementations.md) | Test against real protocol implementations, not scripted stubs | Accepted |
 | [0011](0011-key-rotation.md) | Rotate keys in timed steps, and revoke them separately | Accepted |
 | [0012](0012-mutation-testing.md) | Check the tests with StrykerJS mutation testing, gated on changed lines | Accepted |
+| [0013](0013-mutate-every-module-when-tests-change.md) | Mutate every configured module when a pull request changes tests | Proposed |

@@ -1,11 +1,13 @@
 # Mutation testing, as described in docs/testing.md.
 #
-# On a pull request, Stryker mutates only the broker source lines the pull
-# request changed, and fails if a test misses any mutant. A pull request
-# that changes no broker source passes at once, so the job can be required.
+# On a pull request, Stryker mutates the broker source lines the pull request
+# changed, and fails if a test misses any mutant. If the pull request also
+# changes a test, a test helper or the Stryker configuration, it mutates every
+# module in stryker.config.json too, since a weakened test can let mutants
+# survive in code the pull request didn't touch. A pull request that changes
+# neither passes at once, so the job can be required.
 #
 # Every week, and on demand, it mutates every module in stryker.config.json.
-# This catches a weakened test, which a pull request's own lines can't show.
 
 name: Mutation testing
 
@@ -44,19 +46,34 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
-        run: echo "ranges=$(.github/scripts/mutation-ranges.sh "$BASE")" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "ranges=$(.github/scripts/mutation-ranges.sh "$BASE")" >> "$GITHUB_OUTPUT"
+          if git diff --quiet "$BASE...HEAD" -- 'src/*.test.ts' 'src/test-support/*' stryker.config.json; then
+            echo "tests-changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "tests-changed=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Mutate
         env:
           EVENT: ${{ github.event_name }}
           RANGES: ${{ steps.scope.outputs.ranges }}
+          TESTS_CHANGED: ${{ steps.scope.outputs.tests-changed }}
         run: |
-          if [ "$EVENT" = pull_request ] && [ -z "$RANGES" ]; then
-            echo "This pull request changes no broker source, so there is nothing to mutate." | tee -a "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
           args=()
-          if [ -n "$RANGES" ]; then
-            args=(--mutate "$RANGES")
+          if [ "$EVENT" = pull_request ]; then
+            if [ "$TESTS_CHANGED" = true ]; then
+              # Every configured module, plus changed lines in any other.
+              # --mutate replaces the configured list, so name both.
+              modules=$(node --print 'require("./stryker.config.json").mutate.join(",")')
+              extra=$(tr ',' '\n' <<< "$RANGES" | grep -v -F -f <(tr ',' '\n' <<< "$modules" | sed 's/$/:/') | paste -sd, - || true)
+              args=(--mutate "${modules}${extra:+,$extra}")
+              echo "This pull request changes tests, so every configured module is mutated." | tee -a "$GITHUB_STEP_SUMMARY"
+            elif [ -n "$RANGES" ]; then
+              args=(--mutate "$RANGES")
+            else
+              echo "This pull request changes no broker source or tests, so there is nothing to mutate." | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
           fi
           set -o pipefail
           status=0
