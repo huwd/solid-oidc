@@ -18,7 +18,7 @@ RUN npm install --global "$(node --print 'require("./package.json").packageManag
 # its keys. A named volume mounted here copies this ownership when created.
 RUN mkdir /data
 
-FROM gcr.io/distroless/nodejs26-debian13:nonroot@sha256:1d736cf8b5716c07a245301f92717143215d248fd55771ee1936ef4b3302e531
+FROM gcr.io/distroless/nodejs26-debian13:nonroot@sha256:ffa8a7545403036c94ec76674b5dbac2d425af2d679147cdf3e30180071487b7
 
 WORKDIR /app
 
