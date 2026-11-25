@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 
 import {
   clientDocumentFetch,
+  corsAllowedForClient,
   solidConfiguration,
   solidOidcSupported,
   solidResource,
@@ -132,6 +133,44 @@ describe("tokens for a Solid app", () => {
       visit.url.searchParams.get("error_description"),
       "the broker issues tokens only for Solid",
     );
+  });
+});
+
+describe("cross-origin token requests", () => {
+  // A code that was never issued: the endpoint refuses it after the CORS
+  // check, so the error shows whether the origin got through.
+  async function tokenRequestFrom(harness: Harness, origin: string) {
+    return fetch(`${harness.issuer}/token`, {
+      body: new URLSearchParams({
+        client_id: clientId,
+        code: "never-issued",
+        grant_type: "authorization_code",
+        redirect_uri: solidApp.redirect_uris[0],
+      }),
+      headers: { origin },
+      method: "POST",
+    });
+  }
+
+  it("lets the app's own origin call the token endpoint", async () => {
+    await using harness = await startHarness({ fetch: servingSolidApp().fetch });
+
+    const response = await tokenRequestFrom(harness, appOrigin);
+
+    assert.equal(response.headers.get("access-control-allow-origin"), appOrigin);
+    const body = (await response.json()) as { error: string };
+    assert.notEqual(body.error, "invalid_request", "expected the origin to be allowed");
+  });
+
+  it("refuses the token endpoint to any other origin", async () => {
+    await using harness = await startHarness({ fetch: servingSolidApp().fetch });
+
+    const response = await tokenRequestFrom(harness, "https://elsewhere.example.test");
+
+    assert.equal(response.headers.get("access-control-allow-origin"), null);
+    const body = (await response.json()) as { error: string; error_description: string };
+    assert.equal(body.error, "invalid_request");
+    assert.match(body.error_description, /origin https:\/\/elsewhere\.example\.test not allowed/);
   });
 });
 
@@ -274,6 +313,27 @@ describe("solidConfiguration", () => {
       },
     );
     assert.equal(configuration.extraTokenClaims(context, { kind: "ClientCredentials" }), undefined);
+  });
+
+  it("allows CORS only from the origins of the client's redirect URIs", () => {
+    const context = undefined as never;
+    const client = {
+      redirectUris: [`${appOrigin}/callback`, "http://127.0.0.1:8080/callback", "not a URL"],
+    };
+
+    assert.equal(configuration.clientBasedCORS, corsAllowedForClient);
+    assert.equal(corsAllowedForClient(context, appOrigin, client), true);
+    assert.equal(corsAllowedForClient(context, "http://127.0.0.1:8080", client), true);
+    assert.equal(corsAllowedForClient(context, "https://elsewhere.example.test", client), false);
+    assert.equal(corsAllowedForClient(context, `${appOrigin}:8443`, client), false);
+    assert.equal(corsAllowedForClient(context, "null", client), false);
+    // A file: URL's origin is "null", so without the check it would match.
+    assert.equal(new URL("file:///callback").origin, "null");
+    assert.equal(
+      corsAllowedForClient(context, "null", { redirectUris: ["file:///callback"] }),
+      false,
+    );
+    assert.equal(corsAllowedForClient(context, appOrigin, {}), false);
   });
 
   it("describes the Solid resource", () => {

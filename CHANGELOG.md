@@ -11,6 +11,7 @@ Each change adds its entry under Unreleased when it merges. A release moves thos
 ### Changed
 
 - Refresh tokens last 14 days from the consent that first issued them, and rotating one never extends that. The broker sets this itself instead of using `oidc-provider`'s default, which could let some clients refresh indefinitely, and no longer logs a warning about it at startup. See [decision 0014](docs/decisions/0014-refresh-tokens-last-as-long-as-the-grant.md).
+- Browsers may call the `token` and `userinfo` endpoints for an app only from the origins of the app's own `redirect_uris`, never from a `null` origin. This was `oidc-provider`'s default for public clients, and is now the broker's own rule, so an upgrade can't change it. The startup warning about `clientBasedCORS` no longer appears.
 
 ## [0.1.0] - 2026-11-25
 
