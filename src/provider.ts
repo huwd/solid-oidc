@@ -5,12 +5,15 @@ import Provider, {
   type ClientMetadata,
   type Configuration,
   type FindAccount,
+  type KoaContextWithOIDC,
+  type RefreshToken,
 } from "oidc-provider";
 
 import type { AccountStore } from "./accounts.ts";
 import type { ProviderKeys } from "./keys.ts";
 import {
   interactionLifetimeSeconds,
+  refreshTokenLifetimeSeconds,
   sessionLifetimeSeconds,
   tokenLifetimeSeconds,
 } from "./lifetimes.ts";
@@ -52,13 +55,15 @@ export function createProvider(options: CreateProviderOptions): Provider {
     renderError,
     jwks: { keys: options.keys.signingKeys.map((key) => ({ ...key })) },
     // Set explicitly, because key rotation's waits depend on them.
-    // Stryker disable next-line ObjectLiteral: each value is oidc-provider's default, so tests can't
-    // tell them from unset. Setting them stops an upgrade changing them under those waits.
+    // Stryker disable next-line ObjectLiteral: each number is oidc-provider's default, so tests
+    // can't tell them from unset. Setting them stops an upgrade changing them under those waits.
+    // refreshTokenTtl's own tests cover the refresh token's lifetime.
     ttl: {
       AccessToken: tokenLifetimeSeconds,
       Grant: sessionLifetimeSeconds,
       IdToken: tokenLifetimeSeconds,
       Interaction: interactionLifetimeSeconds,
+      RefreshToken: refreshTokenTtl,
       Session: sessionLifetimeSeconds,
     },
   };
@@ -68,6 +73,25 @@ export function createProvider(options: CreateProviderOptions): Provider {
   // them makes every URL the provider builds start with the issuer.
   provider.proxy = true;
   return provider;
+}
+
+/**
+ * The provider's `ttl.RefreshToken` setting. A refresh token lasts
+ * `refreshTokenLifetimeSeconds` from the consent that first issued it. When
+ * the provider rotates it, the new token keeps the old one's expiry, so an
+ * app can't stay logged in indefinitely by refreshing. oidc-provider's default
+ * does that only for some clients.
+ */
+export function refreshTokenTtl(
+  context: KoaContextWithOIDC | undefined,
+  token: RefreshToken,
+): number {
+  const rotated = context?.oidc.entities.RotatedRefreshToken;
+  if (rotated === undefined) {
+    return refreshTokenLifetimeSeconds;
+  }
+  token.exp = rotated.exp;
+  return rotated.remainingTTL;
 }
 
 /**

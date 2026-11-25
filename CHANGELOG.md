@@ -8,6 +8,10 @@ Each change adds its entry under Unreleased when it merges. A release moves thos
 
 ## [Unreleased]
 
+### Changed
+
+- Refresh tokens last 14 days from the consent that first issued them, and rotating one never extends that. The broker sets this itself instead of using `oidc-provider`'s default, which could let some clients refresh indefinitely, and no longer logs a warning about it at startup. See [decision 0014](docs/decisions/0014-refresh-tokens-last-as-long-as-the-grant.md).
+
 ## [0.1.0] - 2026-11-25
 
 ### Added
