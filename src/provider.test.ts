@@ -2,14 +2,17 @@ import assert from "node:assert/strict";
 import { request } from "node:http";
 import { describe, it } from "node:test";
 import type Koa from "koa";
+import type { KoaContextWithOIDC, RefreshToken } from "oidc-provider";
 
 import { createStaticAccountStore } from "./accounts.ts";
+import { refreshTokenLifetimeSeconds } from "./lifetimes.ts";
 import { pageHeaders } from "./pages.ts";
 import {
   accountFinder,
   interactionUrl,
   interactionUrlFor,
   issuerPath,
+  refreshTokenTtl,
   renderError,
 } from "./provider.ts";
 import { type RunningServer, startServer } from "./server.ts";
@@ -294,5 +297,27 @@ describe("provider helpers", () => {
   it("uses an empty path for a bare-origin issuer", () => {
     assert.equal(issuerPath("https://id.example.test"), "");
     assert.equal(issuerPath("https://example.test/solid"), "/solid");
+  });
+});
+
+describe("refreshTokenTtl", () => {
+  it("gives a new refresh token the full lifetime", () => {
+    const token = {} as RefreshToken;
+    const context = { oidc: { entities: {} } } as unknown as KoaContextWithOIDC;
+
+    assert.equal(refreshTokenTtl(context, token), refreshTokenLifetimeSeconds);
+    assert.equal(refreshTokenTtl(undefined, token), refreshTokenLifetimeSeconds);
+    assert.equal(token.exp, undefined, "expected the provider to set the expiry from the TTL");
+  });
+
+  it("keeps a rotated refresh token's original expiry", () => {
+    const token = {} as RefreshToken;
+    const rotated = { exp: 1_800_000_000, remainingTTL: 3_600 };
+    const context = {
+      oidc: { entities: { RotatedRefreshToken: rotated } },
+    } as unknown as KoaContextWithOIDC;
+
+    assert.equal(refreshTokenTtl(context, token), 3_600);
+    assert.equal(token.exp, 1_800_000_000);
   });
 });

@@ -59,6 +59,27 @@ describe("logging in through the upstream provider", () => {
     assert.equal(claims?.["email"], undefined, "expected no upstream claims to pass through");
   });
 
+  it("logs the login and the app's consent, with no token or code", async () => {
+    await using harness = await startHarness();
+    const login = await appLogin(harness);
+
+    const consent = await visitUntilPage(harness, login.authorizationUrl);
+    const callback = await visitUntilPage(harness, formAction(consent, "Allow"), "POST");
+
+    assert.deepEqual(harness.logs, [
+      {
+        level: "info",
+        message: "Logged in",
+        upstreamIssuer: harness.upstream.issuer,
+        upstreamSubject: aliceSubject,
+        webId: aliceWebId,
+      },
+      { clientId: testApp.client_id, level: "info", message: "App allowed", webId: aliceWebId },
+    ]);
+    const code = callback.url.searchParams.get("code") ?? "";
+    assert.ok(code !== "" && !JSON.stringify(harness.logs).includes(code));
+  });
+
   it("asks for consent naming the app and the WebID", async () => {
     await using harness = await startHarness();
     const login = await appLogin(harness);
@@ -112,6 +133,12 @@ describe("logging in through the upstream provider", () => {
 
     assert.equal(callback.url.searchParams.get("error"), "access_denied");
     assert.equal(callback.url.searchParams.get("error_description"), "The person declined.");
+    assert.deepEqual(harness.logs.at(-1), {
+      clientId: testApp.client_id,
+      level: "info",
+      message: "App denied",
+      webId: aliceWebId,
+    });
   });
 });
 

@@ -59,6 +59,16 @@ The app then gets a DPoP-bound access token, a JWT with `solid` in its audience 
 
 If no WebID matches, the person sees the same page whatever the reason, so the page can't be used to discover who has an account. The broker logs the upstream subject, so an administrator can add it to the accounts file.
 
+The broker also logs each successful login and each consent, as JSON lines on standard output, so an administrator can see who used which WebID and with which apps. The log never holds a token, code or secret.
+
+| `message` | When | Other fields |
+| --------- | ---- | ------------ |
+| `Logged in` | The upstream account mapped to a WebID | `upstreamIssuer`, `upstreamSubject`, `webId` |
+| `App allowed` | The person allowed an app to act as their WebID | `clientId`, `webId` |
+| `App denied` | The person refused an app | `clientId`, and `webId` once logged in |
+| `No account for upstream identity` | The upstream account has no WebID | `upstreamIssuer`, `upstreamSubject` |
+| `Login refused` | The upstream login failed its checks | `error` |
+
 ### Accounts file
 
 The accounts file lists who may log in, and with which WebID. It is JSON:

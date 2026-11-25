@@ -121,6 +121,15 @@ async function handleStep(input: {
   } else if (step === "POST confirm" && prompt === "consent") {
     await confirmConsent({ context, interaction, options });
   } else if (step === "POST abort") {
+    options.log({
+      clientId: clientIdOf(interaction),
+      level: "info",
+      message: "App denied",
+      // Stryker disable next-line OptionalChaining: the deny button appears only after a login.
+      ...(interaction.session?.accountId === undefined
+        ? {}
+        : { webId: interaction.session.accountId }),
+    });
     const result = { error: "access_denied", error_description: "The person declined." };
     await finish({ context, options, result });
   } else {
@@ -190,6 +199,15 @@ async function finishUpstreamLogin({ context, options, uid }: StepInput): Promis
     return;
   }
 
+  // A record of every login, so an administrator can see when, and as
+  // which upstream account, a WebID was used.
+  options.log({
+    level: "info",
+    message: "Logged in",
+    upstreamIssuer: identity.value.issuer,
+    upstreamSubject: identity.value.subject,
+    webId,
+  });
   await finish({ context, options, result: { login: { accountId: webId } } });
 }
 
@@ -197,7 +215,7 @@ async function showConsent(
   input: StepInput & { readonly interaction: Interaction },
 ): Promise<void> {
   const { context, interaction, options, uid } = input;
-  const clientId = String(interaction.params["client_id"]);
+  const clientId = clientIdOf(interaction);
   const client = await options.provider.Client.find(clientId);
   const base = `${options.prefix}/interaction/${uid}`;
   context.set(pageHeaders);
@@ -224,8 +242,7 @@ async function confirmConsent(input: {
   const existing =
     // Stryker disable next-line ConditionalExpression: Grant.find(undefined) also finds nothing.
     interaction.grantId === undefined ? undefined : await Grant.find(interaction.grantId);
-  const grant =
-    existing ?? new Grant({ accountId, clientId: String(interaction.params["client_id"]) });
+  const grant = existing ?? new Grant({ accountId, clientId: clientIdOf(interaction) });
 
   // Stryker disable next-line ConditionalExpression: unreachable. The Solid resource's only
   // scope, webid, is an OpenID scope too, so consent never lacks a resource scope alone.
@@ -246,6 +263,13 @@ async function confirmConsent(input: {
   }
 
   const grantId = await grant.save();
+  // Which apps may act as which WebID: the record of each consent.
+  options.log({
+    clientId: clientIdOf(interaction),
+    level: "info",
+    message: "App allowed",
+    webId: accountId,
+  });
   await finish({ context, options, result: { consent: { grantId } } });
 }
 
@@ -259,6 +283,10 @@ async function finish(input: {
   const returnTo = await options.provider.interactionResult(context.req, context.res, result);
   context.status = 303;
   context.redirect(returnTo);
+}
+
+function clientIdOf(interaction: Interaction): string {
+  return String(interaction.params["client_id"]);
 }
 
 function accountOf(interaction: Interaction): string {

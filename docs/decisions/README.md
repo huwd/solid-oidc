@@ -65,3 +65,4 @@ Editorial improvements, such as clearer wording, typo corrections and link fixes
 | [0011](0011-key-rotation.md) | Rotate keys in timed steps, and revoke them separately | Accepted |
 | [0012](0012-mutation-testing.md) | Check the tests with StrykerJS mutation testing, gated on changed lines | Accepted |
 | [0013](0013-mutate-modules-changed-tests-protect.md) | Mutate the modules that changed tests protect | Accepted |
+| [0014](0014-refresh-tokens-last-as-long-as-the-grant.md) | Refresh tokens last 14 days from consent, however often they are used | Proposed |

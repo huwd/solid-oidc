@@ -1,4 +1,4 @@
-import { type Configuration, errors, type KoaContextWithOIDC } from "oidc-provider";
+import { type Client, type Configuration, errors, type KoaContextWithOIDC } from "oidc-provider";
 
 import { tokenLifetimeSeconds } from "./lifetimes.ts";
 
@@ -58,6 +58,7 @@ export function solidConfiguration(options: SolidConfigurationOptions) {
     // Stryker disable next-line ArrayDeclaration,StringLiteral: oidc-provider always includes sub,
     // so tests can't tell openid's claims from empty. The webid claim is checked.
     claims: { openid: ["sub"], webid: ["webid"] },
+    clientBasedCORS: corsAllowedForClient,
     clientDefaults: {
       // Solid servers accept only DPoP-bound access tokens, so a client
       // can't get any other kind.
@@ -125,6 +126,29 @@ export function solidConfiguration(options: SolidConfigurationOptions) {
       "webid",
     ],
   } satisfies Configuration;
+}
+
+/**
+ * The provider's `clientBasedCORS` setting: which web origins may call the
+ * token and userinfo endpoints for a client. A Solid app runs in the browser
+ * on the origin it redirects back to, so only the origins of the client's own
+ * `redirect_uris` may. Another site that knows an app's client ID can't use
+ * its tokens from a browser. A sandboxed page's `null` origin is never
+ * allowed.
+ *
+ * This is the same rule as oidc-provider's default for public clients, but
+ * chosen here, so an upgrade can't change it. Every Solid app is a public
+ * client.
+ */
+export function corsAllowedForClient(
+  _context: KoaContextWithOIDC,
+  origin: string,
+  client: Pick<Client, "redirectUris">,
+): boolean {
+  if (origin === "null") {
+    return false;
+  }
+  return (client.redirectUris ?? []).some((uri) => URL.parse(uri)?.origin === origin);
 }
 
 /**
