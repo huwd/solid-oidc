@@ -1,6 +1,6 @@
 {
   "name": "solid-oidc",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "A Solid-OIDC identity provider that brokers login to an upstream OpenID Connect provider such as Pocket ID",
   "private": true,
   "license": "MIT",
