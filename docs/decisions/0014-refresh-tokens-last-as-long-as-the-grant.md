@@ -4,7 +4,7 @@
 - **Decided by:** @huwd
 - **Decided:** 2026-11-25
 - **Recorded:** 2026-11-25
-- **Discussion:** to be added with the pull request
+- **Discussion:** [#33](https://github.com/huwd/solid-oidc/pull/33)
 
 ## Summary
 
