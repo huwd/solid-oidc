@@ -8,6 +8,10 @@ Each change adds its entry under Unreleased when it merges. A release moves thos
 
 ## [Unreleased]
 
+### Added
+
+- The broker logs each successful login (`Logged in`, with the upstream account and the WebID) and each consent (`App allowed` or `App denied`, with the app's client ID and the WebID). Before, it logged only failures. The README lists every log message.
+
 ### Changed
 
 - Refresh tokens last 14 days from the consent that first issued them, and rotating one never extends that. The broker sets this itself instead of using `oidc-provider`'s default, which could let some clients refresh indefinitely, and no longer logs a warning about it at startup. See [decision 0014](docs/decisions/0014-refresh-tokens-last-as-long-as-the-grant.md).
